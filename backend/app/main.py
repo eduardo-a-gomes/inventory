@@ -1,0 +1,184 @@
+"""Entrada principal da API FastAPI."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException, Query, Response, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+
+from app.schemas import (
+    AdicionarColunaPayload,
+    AtualizarQuantidadePayload,
+    ColunaSchema,
+    Peca,
+    PecaCreate,
+    PecaUpdate,
+    ReordenarColunasPayload,
+    RenomearColunaPayload,
+)
+from app.services.excel_repository import ExcelRepository
+
+app = FastAPI(
+    title="Inventario Oficina - AutoCardoso",
+    description="API para gerir o inventario de pecas usando SQLite como base de dados.",
+    version="1.0.0",
+)
+
+# Permite que o frontend React, em modo de desenvolvimento, consuma a API.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+    ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+repo = ExcelRepository()
+
+
+@app.get("/health")
+def healthcheck() -> dict:
+    """Endpoint simples para verificar se a API esta viva."""
+    return {"status": "ok"}
+
+
+@app.get("/pecas", response_model=list[Peca])
+def listar_pecas(q: str | None = Query(default=None, description="Termo de pesquisa opcional.")) -> list[Peca]:
+    """Lista pecas, com pesquisa textual opcional."""
+    try:
+        return repo.listar(termo=q)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@app.get("/schema/colunas", response_model=list[ColunaSchema])
+def listar_colunas() -> list[ColunaSchema]:
+    """Lista o schema atual de colunas da tabela."""
+    try:
+        return repo.obter_colunas()
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@app.post("/schema/colunas", response_model=ColunaSchema, status_code=status.HTTP_201_CREATED)
+def adicionar_coluna(payload: AdicionarColunaPayload) -> ColunaSchema:
+    """Adiciona uma coluna dinamica ao schema."""
+    try:
+        return repo.adicionar_coluna(payload.nome)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@app.patch("/schema/colunas/{chave}", response_model=ColunaSchema)
+def renomear_coluna(chave: str, payload: RenomearColunaPayload) -> ColunaSchema:
+    """Renomeia uma coluna do schema."""
+    try:
+        coluna = repo.renomear_coluna(chave, payload.nome)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if not coluna:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coluna nao encontrada.")
+    return coluna
+
+
+@app.delete("/schema/colunas/{chave}", status_code=status.HTTP_204_NO_CONTENT)
+def remover_coluna(chave: str) -> Response:
+    """Remove uma coluna dinamica existente."""
+    try:
+        removed = repo.remover_coluna(chave)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coluna nao encontrada.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.patch("/schema/colunas-ordem", response_model=list[ColunaSchema])
+def reordenar_colunas(payload: ReordenarColunasPayload) -> list[ColunaSchema]:
+    """Atualiza a ordem das colunas e devolve o schema final ordenado."""
+    try:
+        return repo.reordenar_colunas(payload.chaves)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@app.get("/export/excel")
+def exportar_excel() -> StreamingResponse:
+    """Exporta o inventario atual para ficheiro Excel."""
+    conteudo = repo.exportar_para_excel()
+    nome = f"inventario_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    headers = {"Content-Disposition": f'attachment; filename="{nome}"'}
+    return StreamingResponse(
+        iter([conteudo]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
+@app.get("/pecas/{peca_id}", response_model=Peca)
+def obter_peca(peca_id: str) -> Peca:
+    """Obtem detalhes de uma peca pelo ID."""
+    peca = repo.obter_por_id(peca_id)
+    if not peca:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Peca nao encontrada.")
+    return peca
+
+
+@app.post("/pecas", response_model=Peca, status_code=status.HTTP_201_CREATED)
+def criar_peca(payload: PecaCreate) -> Peca:
+    """Regista uma nova peca no inventario."""
+    try:
+        return repo.criar(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@app.put("/pecas/{peca_id}", response_model=Peca)
+def atualizar_peca(peca_id: str, payload: PecaUpdate) -> Peca:
+    """Atualiza todos os dados de uma peca."""
+    try:
+        peca = repo.atualizar(peca_id=peca_id, payload=payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    if not peca:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Peca nao encontrada.")
+    return peca
+
+
+@app.patch("/pecas/{peca_id}/quantidade", response_model=Peca)
+def atualizar_quantidade(peca_id: str, payload: AtualizarQuantidadePayload) -> Peca:
+    """Atualiza apenas a quantidade em stock de uma peca."""
+    try:
+        peca = repo.atualizar_quantidade(peca_id, payload.quantidade)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    if not peca:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Peca nao encontrada.")
+    return peca
+
+
+@app.delete("/pecas/{peca_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_peca(peca_id: str) -> Response:
+    """Remove uma peca do inventario."""
+    try:
+        removed = repo.eliminar(peca_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Peca nao encontrada.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

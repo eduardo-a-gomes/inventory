@@ -1,0 +1,2 @@
+"""Configuracoes e utilitarios centrais."""
+

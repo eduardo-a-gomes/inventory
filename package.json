@@ -1,0 +1,14 @@
+{
+  "name": "inventario-oficina",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "setup": "uv sync --project backend --link-mode=copy && npm --prefix frontend install",
+    "dev": "concurrently -n backend,frontend -c green,cyan \"uv run --project backend uvicorn app.main:app --app-dir backend --reload --port 8000\" \"npm --prefix frontend run dev\"",
+    "dev:backend": "uv run --project backend uvicorn app.main:app --app-dir backend --reload --port 8000",
+    "dev:frontend": "npm --prefix frontend run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
