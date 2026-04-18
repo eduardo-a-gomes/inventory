@@ -67,6 +67,15 @@ Este comando inicia:
 - Backend em `http://localhost:8000` (docs em `http://localhost:8000/docs`)
 - Frontend em `http://localhost:5173`
 
+## Arranque com duplo clique (Windows)
+
+Para abrir sem terminal, usa o ficheiro:
+
+- `Abrir_Inventario.bat`
+
+Este launcher corre o script `arrancar_app.sh`, valida dependencias e arranca backend + frontend.
+Se for a primeira vez, instala automaticamente o que falta no projeto.
+
 ## Comandos individuais (opcional)
 
 ```bash
