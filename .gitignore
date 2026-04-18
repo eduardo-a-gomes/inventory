@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+*.db-journal
 
 # Node
 node_modules/
@@ -12,3 +13,5 @@ dist/
 .vscode/
 .idea/
 
+start_app.bat
+start_app.vbs

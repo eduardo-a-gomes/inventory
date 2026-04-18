@@ -16,6 +16,18 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  background: #121418;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
 body {
   margin: 0;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -24,6 +36,7 @@ body {
     linear-gradient(145deg, #121418 0%, #1c2027 50%, #151920 100%);
   color: var(--texto);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .app {
@@ -90,8 +103,8 @@ body {
 }
 
 .botao-novo-material {
-  min-height: 32px;
-  padding: 0.35rem 0.7rem;
+  min-height: 42px;
+  padding: 0.58rem 0.9rem;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -105,13 +118,6 @@ body {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.botao-novo-material-destaque {
-  min-height: 36px;
-  padding: 0.45rem 0.95rem;
-  border: 1px dashed rgba(130, 229, 184, 0.45);
-  box-shadow: 0 8px 18px rgba(16, 59, 39, 0.34);
 }
 
 .botao-iconico {
@@ -515,6 +521,67 @@ th {
   min-height: 32px;
   padding: 0.35rem 0.5rem;
   font-size: 0.86rem;
+}
+
+.input-preco-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-preco-wrapper .input-preco {
+  padding-right: 1.8rem;
+}
+
+.input-preco-wrapper span {
+  position: absolute;
+  right: 0.62rem;
+  color: var(--texto-secundario);
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.celula-link {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.link-resumido {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  background: transparent;
+  color: var(--texto);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font: inherit;
+  font-weight: inherit;
+}
+
+.link-resumido:hover {
+  color: #dff8eb;
+  filter: none;
+}
+
+.link-resumido svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: var(--texto);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .linha-novo-material td {

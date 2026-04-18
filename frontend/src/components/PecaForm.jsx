@@ -5,12 +5,30 @@ const INITIAL_FORM = {
   categoria: "",
   marca: "",
   designacao: "",
-  quantidade: 0,
+  preco: "0.00",
+  quantidade: 1,
   local: "",
   extras: {},
 };
 
-const CHAVES_BASE = new Set(["referencia", "categoria", "marca", "designacao", "quantidade", "local"]);
+const CHAVES_BASE = new Set(["referencia", "categoria", "marca", "designacao", "preco", "quantidade", "local"]);
+const MAX_TEXTO_MATERIAL = 2048;
+
+function normalizarInputPreco(valor) {
+  const texto = String(valor ?? "").replace(",", ".");
+  const apenasNumeros = texto.replace(/[^\d.]/g, "");
+  const [inteiros = "", ...decimaisPartes] = apenasNumeros.split(".");
+  const decimais = decimaisPartes.join("").slice(0, 2);
+  return decimaisPartes.length ? `${inteiros}.${decimais}` : inteiros;
+}
+
+function precoParaNumero(valor) {
+  const numero = Number(String(valor ?? "").replace(",", "."));
+  if (!Number.isFinite(numero)) {
+    return 0;
+  }
+  return Math.round(Math.max(0, numero) * 100) / 100;
+}
 
 /**
  * Formulario reutilizavel para criar ou editar pecas.
@@ -34,6 +52,7 @@ export default function PecaForm({ modo, pecaSelecionada, colunas, onSubmit, onC
         categoria: pecaSelecionada.categoria || "",
         marca: pecaSelecionada.marca || "",
         designacao: pecaSelecionada.designacao || "",
+        preco: Number(pecaSelecionada.preco || 0).toFixed(2),
         quantidade: Number(pecaSelecionada.quantidade || 0),
         local: pecaSelecionada.local || "",
         extras: extrasIniciais,
@@ -60,7 +79,7 @@ export default function PecaForm({ modo, pecaSelecionada, colunas, onSubmit, onC
 
     setForm((prev) => ({
       ...prev,
-      [name]: name === "quantidade" ? Number(value) : value,
+      [name]: name === "quantidade" ? Number(value) : name === "preco" ? normalizarInputPreco(value) : value,
     }));
   };
 
@@ -75,6 +94,7 @@ export default function PecaForm({ modo, pecaSelecionada, colunas, onSubmit, onC
 
     onSubmit({
       ...form,
+      preco: precoParaNumero(form.preco),
       quantidade: Number.isNaN(form.quantidade) ? 0 : Math.max(0, Number(form.quantidade)),
       local: form.local?.trim() || null,
       extras: extrasNormalizados,
@@ -90,22 +110,39 @@ export default function PecaForm({ modo, pecaSelecionada, colunas, onSubmit, onC
       <form onSubmit={handleSubmit} className="form-grid">
         <label>
           {obterNomeBase("referencia", "Referencia")}
-          <input name="referencia" value={form.referencia} onChange={handleChange} required maxLength={100} />
+          <input name="referencia" value={form.referencia} onChange={handleChange} required maxLength={MAX_TEXTO_MATERIAL} />
         </label>
 
         <label>
           {obterNomeBase("categoria", "Categoria")}
-          <input name="categoria" value={form.categoria} onChange={handleChange} required maxLength={100} />
+          <input name="categoria" value={form.categoria} onChange={handleChange} required maxLength={MAX_TEXTO_MATERIAL} />
         </label>
 
         <label>
           {obterNomeBase("marca", "Marca")}
-          <input name="marca" value={form.marca} onChange={handleChange} required maxLength={100} />
+          <input name="marca" value={form.marca} onChange={handleChange} required maxLength={MAX_TEXTO_MATERIAL} />
         </label>
 
         <label>
           {obterNomeBase("designacao", "Designacao")}
-          <input name="designacao" value={form.designacao} onChange={handleChange} required maxLength={200} />
+          <input name="designacao" value={form.designacao} onChange={handleChange} required maxLength={MAX_TEXTO_MATERIAL} />
+        </label>
+
+        <label>
+          {obterNomeBase("preco", "Preço")}
+          <div className="input-preco-wrapper">
+            <input
+              name="preco"
+              className="input-preco"
+              type="text"
+              inputMode="decimal"
+              value={form.preco}
+              onChange={handleChange}
+              placeholder="0.00"
+              required
+            />
+            <span>€</span>
+          </div>
         </label>
 
         <label>
@@ -115,7 +152,13 @@ export default function PecaForm({ modo, pecaSelecionada, colunas, onSubmit, onC
 
         <label>
           {obterNomeBase("local", "Local")}
-          <input name="local" value={form.local} onChange={handleChange} maxLength={100} placeholder="Ex: Estante 2-B" />
+          <input
+            name="local"
+            value={form.local}
+            onChange={handleChange}
+            maxLength={MAX_TEXTO_MATERIAL}
+            placeholder="Ex: Estante 2-B"
+          />
         </label>
 
         {colunasExtras.map((coluna) => (
@@ -125,7 +168,7 @@ export default function PecaForm({ modo, pecaSelecionada, colunas, onSubmit, onC
               name={`extra:${coluna.chave}`}
               value={form.extras?.[coluna.chave] ?? ""}
               onChange={handleChange}
-              maxLength={200}
+              maxLength={MAX_TEXTO_MATERIAL}
             />
           </label>
         ))}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Tabela principal de pecas do inventario.
@@ -9,9 +9,15 @@ const COLUNAS_PADRAO = [
   { chave: "marca", nome: "Marca" },
   { chave: "designacao", nome: "Designacao" },
   { chave: "local", nome: "Local" },
+  { chave: "preco", nome: "Preço" },
   { chave: "quantidade", nome: "Quantidade" },
 ];
-const CHAVES_BASE = new Set(["referencia", "categoria", "marca", "designacao", "quantidade", "local"]);
+const CHAVES_BASE = new Set(["referencia", "categoria", "marca", "designacao", "preco", "quantidade", "local"]);
+const CHAVE_PRECO = "preco";
+const CHAVE_QUANTIDADE = "quantidade";
+const QUANTIDADE_INICIAL_NOVO_MATERIAL = 1;
+const MAX_TEXTO_MATERIAL = 2048;
+const URL_PATTERN = /^(https?:\/\/|www\.)\S+$/i;
 
 function IconeOrdenacao({ ativo, direcao }) {
   if (!ativo) {
@@ -73,11 +79,58 @@ function IconeCancelar() {
   );
 }
 
+function IconeLink() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
 function obterValorColuna(peca, chave) {
   if (Object.prototype.hasOwnProperty.call(peca, chave)) {
     return peca[chave];
   }
   return peca.extras?.[chave];
+}
+
+function obterUrlNormalizado(valor) {
+  const texto = String(valor ?? "").trim();
+  if (!URL_PATTERN.test(texto)) {
+    return null;
+  }
+  return texto.startsWith("www.") ? `https://${texto}` : texto;
+}
+
+function obterDominioUrl(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, "");
+  } catch {
+    return "Abrir link";
+  }
+}
+
+function formatarPreco(valor) {
+  const numero = Number(valor ?? 0);
+  const seguro = Number.isFinite(numero) ? Math.max(0, numero) : 0;
+  return `${seguro.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+}
+
+function normalizarInputPreco(valor) {
+  const texto = String(valor ?? "").replace(",", ".");
+  const apenasNumeros = texto.replace(/[^\d.]/g, "");
+  const [inteiros = "", ...decimaisPartes] = apenasNumeros.split(".");
+  const decimais = decimaisPartes.join("").slice(0, 2);
+  return decimaisPartes.length ? `${inteiros}.${decimais}` : inteiros;
+}
+
+function precoParaNumero(valor) {
+  const numero = Number(String(valor ?? "").replace(",", "."));
+  if (!Number.isFinite(numero)) {
+    return 0;
+  }
+  return Math.round(Math.max(0, numero) * 100) / 100;
 }
 
 function criarDraftVazio(colunasVisiveis) {
@@ -86,13 +139,18 @@ function criarDraftVazio(colunasVisiveis) {
     categoria: "",
     marca: "",
     designacao: "",
-    quantidade: 0,
+    preco: "0.00",
+    quantidade: QUANTIDADE_INICIAL_NOVO_MATERIAL,
     local: "",
   };
 
   for (const coluna of colunasVisiveis) {
-    if (coluna.chave === "quantidade") {
-      draft[coluna.chave] = 0;
+    if (coluna.chave === CHAVE_PRECO) {
+      draft[coluna.chave] = "0.00";
+      continue;
+    }
+    if (coluna.chave === CHAVE_QUANTIDADE) {
+      draft[coluna.chave] = QUANTIDADE_INICIAL_NOVO_MATERIAL;
       continue;
     }
     if (!Object.prototype.hasOwnProperty.call(draft, coluna.chave)) {
@@ -100,6 +158,16 @@ function criarDraftVazio(colunasVisiveis) {
     }
   }
   return draft;
+}
+
+function ordenarColunasTabela(colunasOrigem) {
+  const colunas = Array.isArray(colunasOrigem) ? colunasOrigem : [];
+  const colunaQuantidade =
+    colunas.find((coluna) => coluna.chave === CHAVE_QUANTIDADE) || COLUNAS_PADRAO.find((coluna) => coluna.chave === CHAVE_QUANTIDADE);
+  const colunaPreco =
+    colunas.find((coluna) => coluna.chave === CHAVE_PRECO) || COLUNAS_PADRAO.find((coluna) => coluna.chave === CHAVE_PRECO);
+  const restantes = colunas.filter((coluna) => coluna.chave !== CHAVE_QUANTIDADE && coluna.chave !== CHAVE_PRECO);
+  return [...restantes, ...(colunaPreco ? [colunaPreco] : []), ...(colunaQuantidade ? [colunaQuantidade] : [])];
 }
 
 export default function PecasTable({
@@ -116,7 +184,10 @@ export default function PecasTable({
   loadingCriacao = false,
   onCriarNovo,
 }) {
-  const colunasVisiveis = colunas.length ? colunas : COLUNAS_PADRAO;
+  const colunasVisiveis = useMemo(() => {
+    const colunasBase = colunas.length ? colunas : COLUNAS_PADRAO;
+    return ordenarColunasTabela(colunasBase);
+  }, [colunas]);
   const totalColunas = colunasVisiveis.length + 1; // +1 da coluna de acoes.
   const classeDensidade = totalColunas >= 14 ? "tabela-ultra-compacta" : totalColunas >= 10 ? "tabela-compacta" : "";
   const tabelaRef = useRef(null);
@@ -150,8 +221,11 @@ export default function PecasTable({
   const draftNovoTemConteudo = () =>
     colunasVisiveis.some((coluna) => {
       const valor = draftNovo[coluna.chave];
-      if (coluna.chave === "quantidade") {
-        return Number(valor ?? 0) > 0;
+      if (coluna.chave === CHAVE_PRECO) {
+        return precoParaNumero(valor) > 0;
+      }
+      if (coluna.chave === CHAVE_QUANTIDADE) {
+        return Number(valor ?? QUANTIDADE_INICIAL_NOVO_MATERIAL) !== QUANTIDADE_INICIAL_NOVO_MATERIAL;
       }
       return String(valor ?? "").trim() !== "";
     });
@@ -196,6 +270,7 @@ export default function PecasTable({
       categoria: String(origem.categoria ?? "").trim(),
       marca: String(origem.marca ?? "").trim(),
       designacao: String(origem.designacao ?? "").trim(),
+      preco: precoParaNumero(origem.preco),
       quantidade: Math.max(0, Number(origem.quantidade ?? 0)),
       local: String(origem.local ?? "").trim() || null,
       extras,
@@ -208,6 +283,7 @@ export default function PecasTable({
       categoria: peca.categoria ?? "",
       marca: peca.marca ?? "",
       designacao: peca.designacao ?? "",
+      preco: Number(peca.preco ?? 0).toFixed(2),
       quantidade: Number(peca.quantidade ?? 0),
       local: peca.local ?? "",
     };
@@ -234,14 +310,14 @@ export default function PecasTable({
   const atualizarDraft = (chave, valor) => {
     setDraft((anterior) => ({
       ...anterior,
-      [chave]: valor,
+      [chave]: chave === CHAVE_PRECO ? normalizarInputPreco(valor) : valor,
     }));
   };
 
   const atualizarDraftNovo = (chave, valor) => {
     setDraftNovo((anterior) => ({
       ...anterior,
-      [chave]: valor,
+      [chave]: chave === CHAVE_PRECO ? normalizarInputPreco(valor) : valor,
     }));
   };
 
@@ -262,6 +338,27 @@ export default function PecasTable({
     if (sucesso) {
       cancelarNovo();
     }
+  };
+
+  const renderizarValorCelula = (valor) => {
+    if (typeof valor === "number") {
+      return valor;
+    }
+
+    const url = obterUrlNormalizado(valor);
+    if (!url) {
+      return valor ?? "-";
+    }
+
+    const dominio = obterDominioUrl(url);
+    return (
+      <div className="celula-link" title={url}>
+        <a className="link-resumido" href={url} target="_blank" rel="noreferrer" title={`Abrir ${url}`}>
+          <IconeLink />
+          {dominio}
+        </a>
+      </div>
+    );
   };
 
   if (loading) {
@@ -317,18 +414,65 @@ export default function PecasTable({
             {criandoNovo ? (
               <tr className="linha-novo-material">
                 {colunasVisiveis.map((coluna) => {
-                  const isQuantidade = coluna.chave === "quantidade";
-                  const valor = draftNovo[coluna.chave] ?? (isQuantidade ? 0 : "");
+                  const isPreco = coluna.chave === CHAVE_PRECO;
+                  const isQuantidade = coluna.chave === CHAVE_QUANTIDADE;
+                  if (isPreco) {
+                    const valorPreco = draftNovo[coluna.chave] ?? "0.00";
+                    return (
+                      <td key={`novo-${coluna.chave}`}>
+                        <div className="input-preco-wrapper">
+                          <input
+                            className="input-inline-tabela input-preco"
+                            type="text"
+                            inputMode="decimal"
+                            value={valorPreco}
+                            onChange={(event) => atualizarDraftNovo(coluna.chave, event.target.value)}
+                            disabled={loadingCriacao}
+                            placeholder="0.00"
+                          />
+                          <span>€</span>
+                        </div>
+                      </td>
+                    );
+                  }
+                  if (isQuantidade) {
+                    const quantidadeAtual = Math.max(0, Number(draftNovo[coluna.chave] ?? QUANTIDADE_INICIAL_NOVO_MATERIAL));
+                    return (
+                      <td key={`novo-${coluna.chave}`}>
+                        <div className="quantidade-box">
+                          <button
+                            type="button"
+                            className="botao-quantidade"
+                            disabled={loadingCriacao || quantidadeAtual <= 0}
+                            onClick={() => atualizarDraftNovo(coluna.chave, Math.max(0, quantidadeAtual - 1))}
+                          >
+                            -
+                          </button>
+                          <span>{quantidadeAtual}</span>
+                          <button
+                            type="button"
+                            className="botao-quantidade"
+                            disabled={loadingCriacao}
+                            onClick={() => atualizarDraftNovo(coluna.chave, quantidadeAtual + 1)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </td>
+                    );
+                  }
+
+                  const valor = draftNovo[coluna.chave] ?? "";
                   return (
                     <td key={`novo-${coluna.chave}`}>
                       <input
                         className="input-inline-tabela"
-                        type={isQuantidade ? "number" : "text"}
-                        min={isQuantidade ? "0" : undefined}
+                        type="text"
                         value={valor}
                         onChange={(event) => atualizarDraftNovo(coluna.chave, event.target.value)}
                         disabled={loadingCriacao}
-                        placeholder={isQuantidade ? "0" : coluna.nome}
+                        maxLength={MAX_TEXTO_MATERIAL}
+                        placeholder={coluna.nome}
                       />
                     </td>
                   );
@@ -369,13 +513,58 @@ export default function PecasTable({
                   {colunasVisiveis.map((coluna) => {
                     if (emEdicao) {
                       const valor = draft[coluna.chave] ?? "";
-                      const isQuantidade = coluna.chave === "quantidade";
+                      const isPreco = coluna.chave === CHAVE_PRECO;
+                      const isQuantidade = coluna.chave === CHAVE_QUANTIDADE;
+                      if (isPreco) {
+                        return (
+                          <td key={`${peca.id}-${coluna.chave}`}>
+                            <div className="input-preco-wrapper">
+                              <input
+                                className="input-inline-tabela input-preco"
+                                type="text"
+                                inputMode="decimal"
+                                value={valor}
+                                onChange={(event) => atualizarDraft(coluna.chave, event.target.value)}
+                                disabled={emCurso}
+                                placeholder="0.00"
+                              />
+                              <span>€</span>
+                            </div>
+                          </td>
+                        );
+                      }
+                      if (isQuantidade) {
+                        const quantidadeAtual = Math.max(0, Number(valor || 0));
+                        return (
+                          <td key={`${peca.id}-${coluna.chave}`}>
+                            <div className="quantidade-box">
+                              <button
+                                type="button"
+                                className="botao-quantidade"
+                                disabled={emCurso || quantidadeAtual <= 0}
+                                onClick={() => atualizarDraft(coluna.chave, Math.max(0, quantidadeAtual - 1))}
+                              >
+                                -
+                              </button>
+                              <span>{quantidadeAtual}</span>
+                              <button
+                                type="button"
+                                className="botao-quantidade"
+                                disabled={emCurso}
+                                onClick={() => atualizarDraft(coluna.chave, quantidadeAtual + 1)}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </td>
+                        );
+                      }
                       return (
                         <td key={`${peca.id}-${coluna.chave}`}>
                           <input
                             className="input-inline-tabela"
-                            type={isQuantidade ? "number" : "text"}
-                            min={isQuantidade ? "0" : undefined}
+                            type="text"
+                            maxLength={MAX_TEXTO_MATERIAL}
                             value={valor}
                             onChange={(event) => atualizarDraft(coluna.chave, event.target.value)}
                             disabled={emCurso}
@@ -384,7 +573,11 @@ export default function PecasTable({
                       );
                     }
 
-                    if (coluna.chave === "quantidade") {
+                    if (coluna.chave === CHAVE_PRECO) {
+                      return <td key={`${peca.id}-${coluna.chave}`}>{formatarPreco(peca.preco)}</td>;
+                    }
+
+                    if (coluna.chave === CHAVE_QUANTIDADE) {
                       return (
                         <td key={`${peca.id}-${coluna.chave}`}>
                           <div className="quantidade-box">
@@ -411,7 +604,7 @@ export default function PecasTable({
                     }
 
                     const valor = obterValorColuna(peca, coluna.chave);
-                    return <td key={`${peca.id}-${coluna.chave}`}>{valor ?? "-"}</td>;
+                    return <td key={`${peca.id}-${coluna.chave}`}>{renderizarValorCelula(valor)}</td>;
                   })}
 
                   <td className="coluna-acoes">

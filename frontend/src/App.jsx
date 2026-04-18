@@ -5,6 +5,9 @@ import PecasTable from "./components/PecasTable";
 import SchemaManagerModal from "./components/SchemaManagerModal";
 import ToastStack from "./components/ToastStack";
 
+const PESQUISA_DEBOUNCE_MS = 220;
+const QUANTIDADE_INICIAL_NOVO_MATERIAL = 1;
+
 function IconeImprimir() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -58,11 +61,17 @@ function temConteudoParaCriar(payload) {
     payload?.local,
   ].some((valor) => String(valor ?? "").trim() !== "");
 
-  const quantidadeComConteudo = Number(payload?.quantidade ?? 0) > 0;
+  const precoComConteudo = Number(payload?.preco ?? 0) > 0;
+  const quantidadeComConteudo =
+    Number(payload?.quantidade ?? QUANTIDADE_INICIAL_NOVO_MATERIAL) !== QUANTIDADE_INICIAL_NOVO_MATERIAL;
 
   const extrasComConteudo = Object.values(payload?.extras || {}).some((valor) => String(valor ?? "").trim() !== "");
 
-  return textosComConteudo || quantidadeComConteudo || extrasComConteudo;
+  return textosComConteudo || precoComConteudo || quantidadeComConteudo || extrasComConteudo;
+}
+
+function normalizarReferencia(valor) {
+  return String(valor ?? "").trim().toLowerCase();
 }
 
 /**
@@ -162,7 +171,15 @@ export default function App() {
     }
   }, [colunas, ordenacao.campo]);
 
-  const abrirConfirmacao = ({ titulo, mensagem, textoConfirmar = "Confirmar", textoCancelar = "Cancelar", perigo = false, onConfirm }) => {
+  const abrirConfirmacao = ({
+    titulo,
+    mensagem,
+    textoConfirmar = "Confirmar",
+    textoCancelar = "Cancelar",
+    perigo = false,
+    onConfirm,
+    onCancel,
+  }) => {
     setConfirmacao({
       titulo,
       mensagem,
@@ -170,6 +187,7 @@ export default function App() {
       textoCancelar,
       perigo,
       onConfirm,
+      onCancel,
     });
   };
 
@@ -177,6 +195,7 @@ export default function App() {
     if (loadingConfirmacao) {
       return;
     }
+    confirmacao?.onCancel?.();
     setConfirmacao(null);
   };
 
@@ -198,6 +217,37 @@ export default function App() {
     if (!temConteudoParaCriar(payload)) {
       mostrarToast("aviso", "Preenche pelo menos um campo antes de adicionar.");
       return false;
+    }
+
+    const referenciaNormalizada = normalizarReferencia(payload?.referencia);
+    if (referenciaNormalizada) {
+      let pecasParaValidar = pecas;
+      try {
+        pecasParaValidar = await inventarioApi.listarPecas("");
+      } catch {
+        // Se a validacao completa falhar, seguimos com a lista atual carregada.
+      }
+
+      const referenciaDuplicada = pecasParaValidar.some(
+        (pecaExistente) => normalizarReferencia(pecaExistente.referencia) === referenciaNormalizada,
+      );
+
+      if (referenciaDuplicada) {
+        const confirmarCriacao = await new Promise((resolve) => {
+          abrirConfirmacao({
+            titulo: "Referencia duplicada",
+            mensagem: `Ja existe um registo com a referencia "${payload.referencia}". Quer mesmo submeter?`,
+            textoConfirmar: "Submeter",
+            textoCancelar: "Cancelar",
+            onConfirm: () => resolve(true),
+            onCancel: () => resolve(false),
+          });
+        });
+
+        if (!confirmarCriacao) {
+          return false;
+        }
+      }
     }
 
     setLoadingForm(true);
@@ -234,32 +284,55 @@ export default function App() {
     }
   };
 
+  const eliminarPeca = async (peca) => {
+    setOperacaoEmCursoId(peca.id);
+    try {
+      await inventarioApi.eliminarPeca(peca.id);
+      mostrarToast("sucesso", "Material eliminado com sucesso.");
+      await carregarPecas(filtroAtual);
+    } catch (error) {
+      mostrarToast("erro", error.message);
+    } finally {
+      setOperacaoEmCursoId(null);
+    }
+  };
+
   const handleEliminar = (peca) => {
     abrirConfirmacao({
       titulo: "Eliminar material",
       mensagem: `Pretende eliminar "${peca.designacao}"?`,
       textoConfirmar: "Eliminar",
       perigo: true,
-      onConfirm: async () => {
-        setOperacaoEmCursoId(peca.id);
-        try {
-          await inventarioApi.eliminarPeca(peca.id);
-          mostrarToast("sucesso", "Material eliminado com sucesso.");
-          await carregarPecas(filtroAtual);
-        } catch (error) {
-          mostrarToast("erro", error.message);
-        } finally {
-          setOperacaoEmCursoId(null);
-        }
-      },
+      onConfirm: () => eliminarPeca(peca),
     });
   };
 
   const handleAlterarQuantidade = async (peca, quantidade) => {
+    const quantidadeAnterior = Number(peca.quantidade ?? 0);
+    const novaQuantidade = Number(quantidade ?? 0);
+    let mensagemSucesso = "Quantidade atualizada.";
+
+    if (novaQuantidade > quantidadeAnterior) {
+      mensagemSucesso = "Quantidade aumentada.";
+    } else if (novaQuantidade < quantidadeAnterior) {
+      mensagemSucesso = "Quantidade reduzida.";
+    }
+
+    if (quantidadeAnterior > 0 && novaQuantidade === 0) {
+      abrirConfirmacao({
+        titulo: "Eliminar registo",
+        mensagem: "Tem a certeza que quer eliminar este registo?",
+        textoConfirmar: "Eliminar",
+        perigo: true,
+        onConfirm: () => eliminarPeca(peca),
+      });
+      return;
+    }
+
     setOperacaoEmCursoId(peca.id);
     try {
       await inventarioApi.atualizarQuantidade(peca.id, quantidade);
-      mostrarToast("sucesso", "Quantidade atualizada.");
+      mostrarToast("sucesso", mensagemSucesso);
       await carregarPecas(filtroAtual);
     } catch (error) {
       mostrarToast("erro", error.message);
@@ -272,6 +345,21 @@ export default function App() {
     event.preventDefault();
     await carregarPecas(pesquisa.trim());
   };
+
+  useEffect(() => {
+    const termo = pesquisa.trim();
+    if (termo === filtroAtual) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      carregarPecas(termo);
+    }, PESQUISA_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [pesquisa, filtroAtual]);
 
   const handleOrdenar = (campo) => {
     setOrdenacao((anterior) => {
@@ -305,6 +393,11 @@ export default function App() {
   };
 
   const handleRemoverColuna = (coluna) => {
+    if (coluna?.chave === "quantidade" || coluna?.chave === "preco") {
+      mostrarToast("aviso", "Essa coluna e fixa e nao pode ser eliminada.");
+      return;
+    }
+
     abrirConfirmacao({
       titulo: "Eliminar coluna",
       mensagem: `Pretende eliminar a coluna "${coluna.nome}"?`,
@@ -362,7 +455,9 @@ export default function App() {
             const cols = colunasPrint
               .map((coluna) => {
                 const valor = obterValorColuna(peca, coluna.chave);
-                return `<td>${escapeHtml(valor ?? "-")}</td>`;
+                const valorFormatado =
+                  coluna.chave === "preco" ? `${Number(valor ?? 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : valor;
+                return `<td>${escapeHtml(valorFormatado ?? "-")}</td>`;
               })
               .join("");
             return `<tr>${cols}</tr>`;
@@ -469,7 +564,7 @@ export default function App() {
         <div className="acoes-pesquisa-inferior">
           <button
             type="button"
-            className="botao-novo-material botao-novo-material-destaque"
+            className="botao-novo-material"
             onClick={() => setTokenNovoMaterial((anterior) => anterior + 1)}
             title="Adicionar novo material ao inventario"
           >

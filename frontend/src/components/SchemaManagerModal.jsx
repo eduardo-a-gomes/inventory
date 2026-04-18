@@ -1,5 +1,22 @@
 import { useEffect, useState } from "react";
 
+const CHAVE_PRECO = "preco";
+const CHAVE_QUANTIDADE = "quantidade";
+const CHAVES_FIXAS = new Set([CHAVE_PRECO, CHAVE_QUANTIDADE]);
+
+function normalizarOrdemComFixasNoFim(chaves = []) {
+  const chavesValidas = chaves.filter(Boolean);
+  const semFixas = chavesValidas.filter((chave) => !CHAVES_FIXAS.has(chave));
+  const fixas = [];
+  if (chavesValidas.includes(CHAVE_PRECO)) {
+    fixas.push(CHAVE_PRECO);
+  }
+  if (!chavesValidas.includes(CHAVE_QUANTIDADE)) {
+    return [...semFixas, ...fixas];
+  }
+  return [...semFixas, ...fixas, CHAVE_QUANTIDADE];
+}
+
 function IconeMais() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -83,7 +100,7 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
     setChaveEditando(null);
     setNomeEdicao("");
     setErroNovaColuna("");
-    setOrdemLocal(colunas.map((coluna) => coluna.chave));
+    setOrdemLocal(normalizarOrdemComFixasNoFim(colunas.map((coluna) => coluna.chave)));
     setChaveArrastar(null);
     setChaveAlvo(null);
   }, [aberto]);
@@ -92,7 +109,7 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
     if (!aberto) {
       return;
     }
-    setOrdemLocal(colunas.map((coluna) => coluna.chave));
+    setOrdemLocal(normalizarOrdemComFixasNoFim(colunas.map((coluna) => coluna.chave)));
   }, [colunas, aberto]);
 
   if (!aberto) {
@@ -142,9 +159,13 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
   const colunasOrdenadas = ordemLocal
     .map((chave) => colunas.find((coluna) => coluna.chave === chave))
     .filter(Boolean);
+  const colunasGeriveis = colunasOrdenadas.filter((coluna) => !CHAVES_FIXAS.has(coluna.chave));
 
   const moverColuna = async (chaveOrigem, chaveDestino) => {
     if (!chaveOrigem || !chaveDestino || chaveOrigem === chaveDestino) {
+      return;
+    }
+    if (CHAVES_FIXAS.has(chaveOrigem) || CHAVES_FIXAS.has(chaveDestino)) {
       return;
     }
 
@@ -157,8 +178,9 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
     const novasChaves = [...ordemLocal];
     const [chaveMovida] = novasChaves.splice(indiceOrigem, 1);
     novasChaves.splice(indiceDestino, 0, chaveMovida);
-    setOrdemLocal(novasChaves);
-    await onReordenar(novasChaves);
+    const ordemNormalizada = normalizarOrdemComFixasNoFim(novasChaves);
+    setOrdemLocal(ordemNormalizada);
+    await onReordenar(ordemNormalizada);
   };
 
   return (
@@ -182,7 +204,7 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
         </div>
 
         <p className="modal-ajuda">
-          Ves aqui as colunas existentes. Podes editar o nome em qualquer coluna e remover colunas pelo botao de caixote.
+          Ves aqui as colunas que podes gerir. As colunas Preço e Quantidade sao fixas e por isso nao aparecem nesta lista.
         </p>
 
         {mostrarInputNova ? (
@@ -217,7 +239,7 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
         ) : null}
 
         <ul className="lista-colunas lista-colunas-unica">
-          {colunasOrdenadas.map((coluna) => {
+          {colunasGeriveis.map((coluna) => {
             const emEdicao = chaveEditando === coluna.chave;
             return (
               <li
@@ -225,12 +247,15 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
                 className={`${chaveArrastar === coluna.chave ? "coluna-em-arrasto" : ""} ${chaveAlvo === coluna.chave ? "coluna-alvo" : ""}`.trim()}
                 onDragOver={(event) => {
                   event.preventDefault();
-                  if (!loading) {
+                  if (!loading && !CHAVES_FIXAS.has(coluna.chave)) {
                     setChaveAlvo(coluna.chave);
                   }
                 }}
                 onDrop={async (event) => {
                   event.preventDefault();
+                  if (CHAVES_FIXAS.has(coluna.chave)) {
+                    return;
+                  }
                   const origem = event.dataTransfer.getData("text/plain") || chaveArrastar;
                   await moverColuna(origem, coluna.chave);
                   setChaveArrastar(null);
@@ -240,9 +265,13 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
                 <button
                   type="button"
                   className="botao-iconico botao-arrastar-coluna"
-                  title="Arrastar para mudar ordem da coluna"
-                  draggable={!loading}
+                  title={CHAVES_FIXAS.has(coluna.chave) ? "Esta coluna e fixa" : "Arrastar para mudar ordem da coluna"}
+                  draggable={!loading && !CHAVES_FIXAS.has(coluna.chave)}
                   onDragStart={(event) => {
+                    if (CHAVES_FIXAS.has(coluna.chave)) {
+                      event.preventDefault();
+                      return;
+                    }
                     setChaveArrastar(coluna.chave);
                     event.dataTransfer.effectAllowed = "move";
                     event.dataTransfer.setData("text/plain", coluna.chave);
@@ -251,7 +280,7 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
                     setChaveArrastar(null);
                     setChaveAlvo(null);
                   }}
-                  disabled={loading}
+                  disabled={loading || CHAVES_FIXAS.has(coluna.chave)}
                 >
                   <IconeArrastar />
                 </button>
