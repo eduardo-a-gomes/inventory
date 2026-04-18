@@ -2,25 +2,28 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Optional
 from typing import Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 ValorExtra = Union[str, int, float, bool, None]
+MAX_TEXTO_MATERIAL = 2048
 
 
 class PecaBase(BaseModel):
     """Campos base de uma peca no inventario."""
 
-    referencia: str = Field(default="", max_length=100)
-    categoria: str = Field(default="", max_length=100)
-    marca: str = Field(default="", max_length=100)
-    designacao: str = Field(default="", max_length=200)
+    referencia: str = Field(default="", max_length=MAX_TEXTO_MATERIAL)
+    categoria: str = Field(default="", max_length=MAX_TEXTO_MATERIAL)
+    marca: str = Field(default="", max_length=MAX_TEXTO_MATERIAL)
+    designacao: str = Field(default="", max_length=MAX_TEXTO_MATERIAL)
+    preco: float = Field(default=0, ge=0, description="Preco unitario em euros.")
     quantidade: int = Field(default=0, ge=0, description="Quantidade atual em stock.")
     local: Optional[str] = Field(
         default=None,
-        max_length=100,
+        max_length=MAX_TEXTO_MATERIAL,
         description="Localizacao da peca na oficina (ex: 2-B).",
     )
     extras: dict[str, ValorExtra] = Field(
@@ -44,6 +47,26 @@ class PecaBase(BaseModel):
             return None
         cleaned = str(value).strip()
         return cleaned or None
+
+    @field_validator("preco", mode="before")
+    @classmethod
+    def validar_preco(cls, value: object) -> float:
+        """Aceita apenas numeros positivos com ate duas casas decimais."""
+        if value is None or value == "":
+            return 0
+
+        texto = str(value).strip().replace(",", ".")
+        try:
+            decimal = Decimal(texto)
+        except (InvalidOperation, ValueError) as exc:
+            raise ValueError("O preco tem de ser um numero.") from exc
+
+        if decimal < 0:
+            raise ValueError("O preco nao pode ser negativo.")
+        if decimal.as_tuple().exponent < -2:
+            raise ValueError("O preco so pode ter ate 2 casas decimais.")
+
+        return float(decimal.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
     @field_validator("extras", mode="before")
     @classmethod
@@ -91,10 +114,11 @@ class PecaCreate(PecaBase):
                 bool(self.local),
             ]
         )
+        preco_tem_conteudo = self.preco > 0
         quantidade_tem_conteudo = self.quantidade > 0
         extras_tem_conteudo = any(self._valor_tem_conteudo(valor) for valor in self.extras.values())
 
-        if not any([textos_tem_conteudo, quantidade_tem_conteudo, extras_tem_conteudo]):
+        if not any([textos_tem_conteudo, preco_tem_conteudo, quantidade_tem_conteudo, extras_tem_conteudo]):
             raise ValueError("Preencha pelo menos um campo para criar o material.")
         return self
 

@@ -27,14 +27,16 @@ class ExcelRepository:
 
     def __init__(self) -> None:
         self._lock = RLock()
-        self._core_keys = {"referencia", "categoria", "marca", "designacao", "quantidade", "local", "id"}
+        self._core_keys = {"referencia", "categoria", "marca", "designacao", "preco", "quantidade", "local", "id"}
+        self._fixed_core_keys = {"preco", "quantidade", "id"}
         self._core_columns = [
-            ColunaSchema(chave="referencia", nome="Referência", removivel=False),
-            ColunaSchema(chave="categoria", nome="Categoria", removivel=False),
-            ColunaSchema(chave="marca", nome="Marca", removivel=False),
-            ColunaSchema(chave="designacao", nome="Designação", removivel=False),
+            ColunaSchema(chave="referencia", nome="Referência", removivel=True),
+            ColunaSchema(chave="categoria", nome="Categoria", removivel=True),
+            ColunaSchema(chave="marca", nome="Marca", removivel=True),
+            ColunaSchema(chave="designacao", nome="Designação", removivel=True),
+            ColunaSchema(chave="preco", nome="Preço", removivel=False),
             ColunaSchema(chave="quantidade", nome="Quantidade", removivel=False),
-            ColunaSchema(chave="local", nome="Local", removivel=False),
+            ColunaSchema(chave="local", nome="Local", removivel=True),
         ]
 
         self._validar_caminho_bd()
@@ -46,7 +48,7 @@ class ExcelRepository:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT id, referencia, categoria, marca, designacao, quantidade, local, extras
+                SELECT id, referencia, categoria, marca, designacao, preco, quantidade, local, extras
                 FROM pecas
                 ORDER BY LOWER(designacao), LOWER(referencia)
                 """
@@ -64,7 +66,7 @@ class ExcelRepository:
         with self._lock, self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT id, referencia, categoria, marca, designacao, quantidade, local, extras
+                SELECT id, referencia, categoria, marca, designacao, preco, quantidade, local, extras
                 FROM pecas
                 WHERE id = ?
                 """,
@@ -81,8 +83,8 @@ class ExcelRepository:
 
             conn.execute(
                 """
-                INSERT INTO pecas (id, referencia, categoria, marca, designacao, quantidade, local, extras)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO pecas (id, referencia, categoria, marca, designacao, preco, quantidade, local, extras)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     peca_id,
@@ -90,6 +92,7 @@ class ExcelRepository:
                     payload.categoria,
                     payload.marca,
                     payload.designacao,
+                    payload.preco,
                     payload.quantidade,
                     payload.local,
                     json.dumps(extras_validos, ensure_ascii=False),
@@ -103,6 +106,7 @@ class ExcelRepository:
                 categoria=payload.categoria,
                 marca=payload.marca,
                 designacao=payload.designacao,
+                preco=payload.preco,
                 quantidade=payload.quantidade,
                 local=payload.local,
                 extras=extras_validos,
@@ -123,6 +127,7 @@ class ExcelRepository:
                     categoria = ?,
                     marca = ?,
                     designacao = ?,
+                    preco = ?,
                     quantidade = ?,
                     local = ?,
                     extras = ?
@@ -133,6 +138,7 @@ class ExcelRepository:
                     payload.categoria,
                     payload.marca,
                     payload.designacao,
+                    payload.preco,
                     payload.quantidade,
                     payload.local,
                     json.dumps(extras_validos, ensure_ascii=False),
@@ -147,6 +153,7 @@ class ExcelRepository:
                 categoria=payload.categoria,
                 marca=payload.marca,
                 designacao=payload.designacao,
+                preco=payload.preco,
                 quantidade=payload.quantidade,
                 local=payload.local,
                 extras=extras_validos,
@@ -165,7 +172,7 @@ class ExcelRepository:
 
             row = conn.execute(
                 """
-                SELECT id, referencia, categoria, marca, designacao, quantidade, local, extras
+                SELECT id, referencia, categoria, marca, designacao, preco, quantidade, local, extras
                 FROM pecas
                 WHERE id = ?
                 """,
@@ -190,6 +197,15 @@ class ExcelRepository:
                 """
             ).fetchall()
             core_name_map = {row["chave"]: row["nome"] for row in core_names_rows}
+            ordem_rows = conn.execute(
+                """
+                SELECT chave, posicao
+                FROM schema_ordem_colunas
+                ORDER BY posicao ASC
+                """
+            ).fetchall()
+            ordem = {row["chave"]: int(row["posicao"]) for row in ordem_rows}
+            ordem_definida = bool(ordem)
 
             colunas_core = [
                 ColunaSchema(
@@ -198,6 +214,7 @@ class ExcelRepository:
                     removivel=coluna.removivel,
                 )
                 for coluna in self._core_columns
+                if not ordem_definida or coluna.chave in ordem or coluna.chave in self._fixed_core_keys
             ]
 
             rows = conn.execute(
@@ -210,16 +227,8 @@ class ExcelRepository:
             dinamicas = [ColunaSchema(chave=row["chave"], nome=row["nome"], removivel=True) for row in rows]
             todas = [*colunas_core, *dinamicas]
 
-            ordem_rows = conn.execute(
-                """
-                SELECT chave, posicao
-                FROM schema_ordem_colunas
-                ORDER BY posicao ASC
-                """
-            ).fetchall()
-            ordem = {row["chave"]: int(row["posicao"]) for row in ordem_rows}
             todas.sort(key=lambda coluna: ordem.get(coluna.chave, 9999))
-            return todas
+            return self._normalizar_ordem_colunas(todas)
 
     def adicionar_coluna(self, nome: str) -> ColunaSchema:
         """Adiciona uma nova coluna dinamica."""
@@ -229,7 +238,37 @@ class ExcelRepository:
             if not chave:
                 raise ValueError("O nome da coluna nao e valido.")
             if chave in self._core_keys:
-                raise ValueError("Nao e permitido criar coluna com nome repetido.")
+                if chave in self._fixed_core_keys:
+                    raise ValueError("Ja existe uma coluna com esse nome.")
+
+                coluna_core = next((coluna for coluna in self._core_columns if coluna.chave == chave), None)
+                if not coluna_core:
+                    raise ValueError("Ja existe uma coluna com esse nome.")
+
+                visivel = conn.execute(
+                    "SELECT 1 FROM schema_ordem_colunas WHERE chave = ?",
+                    (chave,),
+                ).fetchone()
+                if visivel:
+                    raise ValueError("Ja existe uma coluna com esse nome.")
+
+                proxima_pos = conn.execute(
+                    "SELECT COALESCE(MAX(posicao), 0) AS max_pos FROM schema_ordem_colunas"
+                ).fetchone()
+                conn.execute(
+                    """
+                    INSERT INTO schema_core_nomes (chave, nome)
+                    VALUES (?, ?)
+                    ON CONFLICT(chave) DO UPDATE SET nome = excluded.nome
+                    """,
+                    (chave, nome_limpo),
+                )
+                conn.execute(
+                    "INSERT OR REPLACE INTO schema_ordem_colunas (chave, posicao) VALUES (?, ?)",
+                    (chave, int(proxima_pos["max_pos"]) + 1),
+                )
+                conn.commit()
+                return ColunaSchema(chave=chave, nome=nome_limpo, removivel=coluna_core.removivel)
 
             existente = conn.execute("SELECT 1 FROM schema_colunas WHERE chave = ?", (chave,)).fetchone()
             if existente:
@@ -258,8 +297,16 @@ class ExcelRepository:
             chave_normalizada = self._normalizar_chave_coluna(chave)
             if not chave_normalizada:
                 return False
+            if chave_normalizada in self._fixed_core_keys:
+                raise ValueError("Nao e permitido remover colunas fixas.")
             if chave_normalizada in self._core_keys:
-                raise ValueError("Nao e permitido remover colunas base do sistema.")
+                existe_core = any(coluna.chave == chave_normalizada for coluna in self._core_columns)
+                if not existe_core:
+                    return False
+
+                removed = conn.execute("DELETE FROM schema_ordem_colunas WHERE chave = ?", (chave_normalizada,))
+                conn.commit()
+                return removed.rowcount > 0
 
             existente = conn.execute("SELECT 1 FROM schema_colunas WHERE chave = ?", (chave_normalizada,)).fetchone()
             if not existente:
@@ -301,7 +348,11 @@ class ExcelRepository:
                 conn.commit()
                 if updated.rowcount == 0:
                     return None
-                return ColunaSchema(chave=chave_normalizada, nome=nome_limpo, removivel=False)
+                return ColunaSchema(
+                    chave=chave_normalizada,
+                    nome=nome_limpo,
+                    removivel=chave_normalizada not in self._fixed_core_keys,
+                )
 
             updated = conn.execute(
                 "UPDATE schema_colunas SET nome = ? WHERE chave = ?",
@@ -345,6 +396,7 @@ class ExcelRepository:
 
         # Header
         ws.append([coluna.nome for coluna in colunas])
+        indice_preco = next((idx for idx, coluna in enumerate(colunas, start=1) if coluna.chave == "preco"), None)
 
         for peca in pecas:
             linha = []
@@ -354,6 +406,8 @@ class ExcelRepository:
                 else:
                     linha.append(peca.extras.get(coluna.chave))
             ws.append(linha)
+            if indice_preco:
+                ws.cell(row=ws.max_row, column=indice_preco).number_format = '#,##0.00 €'
 
         buffer = BytesIO()
         wb.save(buffer)
@@ -381,6 +435,7 @@ class ExcelRepository:
                     categoria TEXT NOT NULL,
                     marca TEXT NOT NULL,
                     designacao TEXT NOT NULL,
+                    preco REAL NOT NULL DEFAULT 0,
                     quantidade INTEGER NOT NULL DEFAULT 0,
                     local TEXT,
                     extras TEXT NOT NULL DEFAULT '{}'
@@ -418,9 +473,11 @@ class ExcelRepository:
                     """
                     INSERT OR IGNORE INTO schema_core_nomes (chave, nome)
                     VALUES (?, ?)
-                    """,
-                    (coluna.chave, coluna.nome),
-                )
+                """,
+                (coluna.chave, coluna.nome),
+            )
+
+            self._migrar_preco_core(conn)
 
             ordem_existente = conn.execute("SELECT COUNT(*) AS total FROM schema_ordem_colunas").fetchone()
             if int(ordem_existente["total"]) == 0:
@@ -454,12 +511,50 @@ class ExcelRepository:
             for chave in chaves_atuais:
                 if chave in chaves_ordenadas:
                     continue
+                if chave in self._core_keys and chave not in self._fixed_core_keys:
+                    continue
                 conn.execute(
                     "INSERT INTO schema_ordem_colunas (chave, posicao) VALUES (?, ?)",
                     (chave, proxima_pos),
                 )
                 proxima_pos += 1
             conn.commit()
+
+    def _migrar_preco_core(self, conn: sqlite3.Connection) -> None:
+        """Garante que o preco existe como coluna base e remove duplicados dinamicos."""
+        colunas_pecas = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(pecas)").fetchall()
+        }
+        if "preco" not in colunas_pecas:
+            conn.execute("ALTER TABLE pecas ADD COLUMN preco REAL NOT NULL DEFAULT 0")
+
+        coluna_dinamica_preco = conn.execute(
+            "SELECT 1 FROM schema_colunas WHERE chave = ?",
+            ("preco",),
+        ).fetchone()
+        if coluna_dinamica_preco:
+            rows = conn.execute("SELECT id, preco, extras FROM pecas").fetchall()
+            for row in rows:
+                extras = self._parse_extras(row["extras"])
+                preco_extra = self._safe_price(extras.pop("preco", None))
+                preco_atual = self._safe_price(row["preco"])
+                novo_preco = preco_atual if preco_atual > 0 else preco_extra
+                conn.execute(
+                    "UPDATE pecas SET preco = ?, extras = ? WHERE id = ?",
+                    (novo_preco, json.dumps(extras, ensure_ascii=False), row["id"]),
+                )
+
+            conn.execute("DELETE FROM schema_colunas WHERE chave = ?", ("preco",))
+            conn.execute("DELETE FROM schema_ordem_colunas WHERE chave = ?", ("preco",))
+
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO schema_core_nomes (chave, nome)
+            VALUES (?, ?)
+            """,
+            ("preco", "Preço"),
+        )
 
     def _migrar_excel_legacy_se_necessario(self) -> None:
         """
@@ -502,6 +597,7 @@ class ExcelRepository:
             aliases = {
                 "referencia": {"referencia", "ref"},
                 "designacao": {"designacao"},
+                "preco": {"preco", "preco_eur", "preco_euro", "preco_unitario"},
             }
             encontrado = None
             norm_no_accents = self._normalizar_texto(nome)
@@ -550,6 +646,7 @@ class ExcelRepository:
                     continue
 
                 quantidade = self._safe_int(linha.get("quantidade"))
+                preco = self._safe_price(linha.get("preco"))
                 local_raw = linha.get("local")
                 local = str(local_raw).strip() if local_raw is not None and str(local_raw).strip() else None
                 peca_id = str(linha.get("id") or "").strip() or str(uuid4())
@@ -567,8 +664,8 @@ class ExcelRepository:
 
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO pecas (id, referencia, categoria, marca, designacao, quantidade, local, extras)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT OR REPLACE INTO pecas (id, referencia, categoria, marca, designacao, preco, quantidade, local, extras)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         peca_id,
@@ -576,6 +673,7 @@ class ExcelRepository:
                         categoria,
                         marca,
                         designacao,
+                        preco,
                         max(0, quantidade),
                         local,
                         json.dumps(extras, ensure_ascii=False),
@@ -615,10 +713,24 @@ class ExcelRepository:
             categoria=row["categoria"],
             marca=row["marca"],
             designacao=row["designacao"],
+            preco=self._safe_price(row["preco"]),
             quantidade=max(0, int(row["quantidade"])),
             local=row["local"],
             extras=self._parse_extras(row["extras"]),
         )
+
+    @staticmethod
+    def _normalizar_ordem_colunas(colunas: List[ColunaSchema]) -> List[ColunaSchema]:
+        """Mantem Preco imediatamente antes de Quantidade, independentemente da ordem guardada."""
+        resultado = [coluna for coluna in colunas if coluna.chave not in {"preco", "quantidade"}]
+        coluna_preco = next((coluna for coluna in colunas if coluna.chave == "preco"), None)
+        coluna_quantidade = next((coluna for coluna in colunas if coluna.chave == "quantidade"), None)
+
+        if coluna_preco:
+            resultado.append(coluna_preco)
+        if coluna_quantidade:
+            resultado.append(coluna_quantidade)
+        return resultado
 
     @staticmethod
     def _parse_extras(raw: object) -> dict[str, object]:
@@ -655,6 +767,16 @@ class ExcelRepository:
             return 0
 
     @staticmethod
+    def _safe_price(value: object) -> float:
+        """Converte preco para float nao negativo com duas casas decimais."""
+        if value is None:
+            return 0
+        try:
+            return round(max(0.0, float(str(value).replace(",", "."))), 2)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
     def _match_termo(peca: Peca, termo: str) -> bool:
         """Filtro textual para pesquisa."""
         extras_texto = " ".join(str(valor) for valor in peca.extras.values() if valor is not None)
@@ -664,6 +786,7 @@ class ExcelRepository:
                 peca.categoria,
                 peca.marca,
                 peca.designacao,
+                f"{peca.preco:.2f}",
                 str(peca.quantidade),
                 peca.local or "",
                 peca.id,
