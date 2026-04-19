@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, Query, Response, status
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
+from app.core.config import FRONTEND_DIST_DIR
 from app.schemas import (
     AdicionarColunaPayload,
     AtualizarQuantidadePayload,
@@ -25,6 +27,7 @@ app = FastAPI(
     description="API para gerir o inventario de pecas usando SQLite como base de dados.",
     version="1.0.0",
 )
+api_router = APIRouter()
 
 # Permite que o frontend React, em modo de desenvolvimento, consuma a API.
 app.add_middleware(
@@ -46,13 +49,13 @@ app.add_middleware(
 repo = ExcelRepository()
 
 
-@app.get("/health")
+@api_router.get("/health")
 def healthcheck() -> dict:
     """Endpoint simples para verificar se a API esta viva."""
     return {"status": "ok"}
 
 
-@app.get("/pecas", response_model=list[Peca])
+@api_router.get("/pecas", response_model=list[Peca])
 def listar_pecas(q: str | None = Query(default=None, description="Termo de pesquisa opcional.")) -> list[Peca]:
     """Lista pecas, com pesquisa textual opcional."""
     try:
@@ -61,7 +64,7 @@ def listar_pecas(q: str | None = Query(default=None, description="Termo de pesqu
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
-@app.get("/schema/colunas", response_model=list[ColunaSchema])
+@api_router.get("/schema/colunas", response_model=list[ColunaSchema])
 def listar_colunas() -> list[ColunaSchema]:
     """Lista o schema atual de colunas da tabela."""
     try:
@@ -70,7 +73,7 @@ def listar_colunas() -> list[ColunaSchema]:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
-@app.post("/schema/colunas", response_model=ColunaSchema, status_code=status.HTTP_201_CREATED)
+@api_router.post("/schema/colunas", response_model=ColunaSchema, status_code=status.HTTP_201_CREATED)
 def adicionar_coluna(payload: AdicionarColunaPayload) -> ColunaSchema:
     """Adiciona uma coluna dinamica ao schema."""
     try:
@@ -79,7 +82,7 @@ def adicionar_coluna(payload: AdicionarColunaPayload) -> ColunaSchema:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
-@app.patch("/schema/colunas/{chave}", response_model=ColunaSchema)
+@api_router.patch("/schema/colunas/{chave}", response_model=ColunaSchema)
 def renomear_coluna(chave: str, payload: RenomearColunaPayload) -> ColunaSchema:
     """Renomeia uma coluna do schema."""
     try:
@@ -92,7 +95,7 @@ def renomear_coluna(chave: str, payload: RenomearColunaPayload) -> ColunaSchema:
     return coluna
 
 
-@app.delete("/schema/colunas/{chave}", status_code=status.HTTP_204_NO_CONTENT)
+@api_router.delete("/schema/colunas/{chave}", status_code=status.HTTP_204_NO_CONTENT)
 def remover_coluna(chave: str) -> Response:
     """Remove uma coluna dinamica existente."""
     try:
@@ -105,7 +108,7 @@ def remover_coluna(chave: str) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@app.patch("/schema/colunas-ordem", response_model=list[ColunaSchema])
+@api_router.patch("/schema/colunas-ordem", response_model=list[ColunaSchema])
 def reordenar_colunas(payload: ReordenarColunasPayload) -> list[ColunaSchema]:
     """Atualiza a ordem das colunas e devolve o schema final ordenado."""
     try:
@@ -114,7 +117,7 @@ def reordenar_colunas(payload: ReordenarColunasPayload) -> list[ColunaSchema]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
-@app.get("/export/excel")
+@api_router.get("/export/excel")
 def exportar_excel() -> StreamingResponse:
     """Exporta o inventario atual para ficheiro Excel."""
     conteudo = repo.exportar_para_excel()
@@ -127,7 +130,7 @@ def exportar_excel() -> StreamingResponse:
     )
 
 
-@app.get("/pecas/{peca_id}", response_model=Peca)
+@api_router.get("/pecas/{peca_id}", response_model=Peca)
 def obter_peca(peca_id: str) -> Peca:
     """Obtem detalhes de uma peca pelo ID."""
     peca = repo.obter_por_id(peca_id)
@@ -136,7 +139,7 @@ def obter_peca(peca_id: str) -> Peca:
     return peca
 
 
-@app.post("/pecas", response_model=Peca, status_code=status.HTTP_201_CREATED)
+@api_router.post("/pecas", response_model=Peca, status_code=status.HTTP_201_CREATED)
 def criar_peca(payload: PecaCreate) -> Peca:
     """Regista uma nova peca no inventario."""
     try:
@@ -145,7 +148,7 @@ def criar_peca(payload: PecaCreate) -> Peca:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
-@app.put("/pecas/{peca_id}", response_model=Peca)
+@api_router.put("/pecas/{peca_id}", response_model=Peca)
 def atualizar_peca(peca_id: str, payload: PecaUpdate) -> Peca:
     """Atualiza todos os dados de uma peca."""
     try:
@@ -158,7 +161,7 @@ def atualizar_peca(peca_id: str, payload: PecaUpdate) -> Peca:
     return peca
 
 
-@app.patch("/pecas/{peca_id}/quantidade", response_model=Peca)
+@api_router.patch("/pecas/{peca_id}/quantidade", response_model=Peca)
 def atualizar_quantidade(peca_id: str, payload: AtualizarQuantidadePayload) -> Peca:
     """Atualiza apenas a quantidade em stock de uma peca."""
     try:
@@ -171,7 +174,7 @@ def atualizar_quantidade(peca_id: str, payload: AtualizarQuantidadePayload) -> P
     return peca
 
 
-@app.delete("/pecas/{peca_id}", status_code=status.HTTP_204_NO_CONTENT)
+@api_router.delete("/pecas/{peca_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_peca(peca_id: str) -> Response:
     """Remove uma peca do inventario."""
     try:
@@ -182,3 +185,10 @@ def eliminar_peca(peca_id: str) -> Response:
     if not removed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Peca nao encontrada.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+app.include_router(api_router)
+app.include_router(api_router, prefix="/api")
+
+if FRONTEND_DIST_DIR.exists():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST_DIR, html=True), name="frontend")

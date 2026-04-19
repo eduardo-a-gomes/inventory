@@ -101,7 +101,7 @@ async function request(path, options = {}) {
       ...options,
     });
   } catch (error) {
-    throw new Error("Nao foi possivel ligar ao backend. Confirma se o comando 'npm run dev' esta ativo.");
+    throw new Error("Nao foi possivel ligar ao servidor da aplicacao. Fecha e volta a abrir o inventario.");
   }
 
   if (!response.ok) {
