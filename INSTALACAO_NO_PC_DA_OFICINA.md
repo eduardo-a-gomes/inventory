@@ -11,6 +11,12 @@ Usa um destes:
 
 Se levares o `.zip`, descompacta primeiro no PC dele.
 
+Importante:
+
+- nao abras o `.exe` diretamente de dentro do `.zip`
+- nao copies so o ficheiro `InventarioOficina.exe`
+- tens de copiar a pasta completa `InventarioOficina`, incluindo a pasta `_internal`
+
 ## Instalacao recomendada
 
 ### 1. Copiar a app para uma pasta fixa
@@ -22,6 +28,11 @@ C:\InventarioOficina
 ```
 
 Depois copia para la o conteudo da pasta `InventarioOficina` gerada no build.
+
+No fim, dentro dessa pasta devem existir pelo menos:
+
+- `InventarioOficina.exe`
+- `_internal`
 
 No fim, deves ficar com este ficheiro:
 
@@ -100,6 +111,48 @@ Nao costuma ser preciso fazer nada, mas se acontecer:
 
 1. olha para a pequena janela da app
 2. clica no botao `Abrir inventario`
+
+## Se a janela abrir mas ficar presa
+
+Nesta versao, a janela mostra tambem o caminho do ficheiro de log.
+
+O log fica aqui:
+
+```text
+%LOCALAPPDATA%\InventarioOficina\inventario_launcher.log
+```
+
+Se houver problema no PC dele:
+
+1. fecha a app
+2. abre esse ficheiro
+3. envia-me o conteudo do log
+
+## Compatibilidade e causas mais provaveis de erro
+
+Esta build foi gerada em Windows 64 bits. Na pratica, o mais seguro e usar em:
+
+- Windows 10 64 bits
+- Windows 11 64 bits
+
+As causas mais provaveis para falhar noutra maquina sao:
+
+1. sistema operativo diferente de Windows
+2. Windows muito antigo ou 32 bits
+3. abrir o `.exe` ainda dentro do `.zip`
+4. copiar so o `InventarioOficina.exe` sem a pasta `_internal`
+5. antivirus ou SmartScreen a bloquear o executavel ou a pasta `_internal`
+6. politicas da empresa a bloquearem programas nao assinados
+7. browser predefinido mal configurado ou inexistente
+8. permissoes bloqueadas para escrever em `%LOCALAPPDATA%`
+9. correr a app a partir de uma pen USB, pasta de rede ou local temporario com bloqueios
+10. algum software de seguranca a bloquear ligacoes locais `127.0.0.1`
+
+Se houver duvida, a primeira verificacao e sempre:
+
+```text
+%LOCALAPPDATA%\InventarioOficina\inventario_launcher.log
+```
 
 ## Backup recomendado
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import logging
+import os
 import socket
 import threading
 import time
@@ -16,11 +18,27 @@ from tkinter import messagebox, ttk
 import uvicorn
 
 from app.core.config import APP_DATA_DIR, BUNDLE_ROOT
-from app.main import app
 
 
 APP_TITLE = "Inventario Oficina"
 SERVER_HOST = "127.0.0.1"
+LOG_PATH = (APP_DATA_DIR / "inventario_launcher.log").resolve()
+LOGGER = logging.getLogger("inventario_launcher")
+
+
+def configure_logging() -> None:
+    """Configura logging persistente para diagnostico no PC do utilizador."""
+    APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    if LOGGER.handlers:
+        return
+
+    LOGGER.setLevel(logging.INFO)
+    handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
+    LOGGER.addHandler(handler)
+    LOGGER.propagate = False
+    LOGGER.info("Launcher iniciado.")
 
 
 class ServerThread(threading.Thread):
@@ -33,22 +51,29 @@ class ServerThread(threading.Thread):
         self.error: Exception | None = None
 
     def run(self) -> None:
+        LOGGER.info("A arrancar servidor local na porta %s.", self.port)
         try:
+            from app.main import app as fastapi_app
+
             config = uvicorn.Config(
-                app=app,
+                app=fastapi_app,
                 host=SERVER_HOST,
                 port=self.port,
                 log_level="warning",
                 access_log=False,
+                log_config=None,
             )
             self.server = uvicorn.Server(config)
             self.server.install_signal_handlers = lambda: None
             self.server.run()
+            LOGGER.info("Servidor local terminou normalmente.")
         except Exception as exc:  # pragma: no cover - caminho excecional de arranque
             self.error = exc
+            LOGGER.exception("Erro ao arrancar o servidor local.")
 
     def stop(self) -> None:
         if self.server is not None:
+            LOGGER.info("Pedido de fecho do servidor local.")
             self.server.should_exit = True
 
 
@@ -64,7 +89,7 @@ def construir_base_url(port: int) -> str:
     return f"http://{SERVER_HOST}:{port}"
 
 
-def esperar_servidor(base_url: str, server_thread: ServerThread, timeout: float = 30.0) -> None:
+def esperar_servidor(base_url: str, server_thread: ServerThread, timeout: float = 45.0) -> None:
     """Espera ate o backend responder ao healthcheck."""
     deadline = time.time() + timeout
     health_url = f"{base_url}/api/health"
@@ -76,6 +101,7 @@ def esperar_servidor(base_url: str, server_thread: ServerThread, timeout: float 
         try:
             with urllib.request.urlopen(health_url, timeout=2) as response:
                 if response.status == 200:
+                    LOGGER.info("Healthcheck respondeu com 200 em %s.", health_url)
                     return
         except urllib.error.URLError:
             time.sleep(0.25)
@@ -85,13 +111,16 @@ def esperar_servidor(base_url: str, server_thread: ServerThread, timeout: float 
 
 def smoke_test() -> int:
     """Valida se o executavel consegue arrancar backend e frontend corretamente."""
+    configure_logging()
+    LOGGER.info("A executar smoke test do launcher.")
+
     port = encontrar_porta_livre()
     base_url = construir_base_url(port)
     server_thread = ServerThread(port)
     server_thread.start()
 
     try:
-        esperar_servidor(base_url, server_thread, timeout=35)
+        esperar_servidor(base_url, server_thread, timeout=45)
 
         with urllib.request.urlopen(f"{base_url}/api/schema/colunas", timeout=5) as response:
             if response.status != 200:
@@ -110,6 +139,7 @@ def smoke_test() -> int:
         server_thread.stop()
         server_thread.join(timeout=5)
 
+    LOGGER.info("Smoke test concluido com sucesso.")
     return 0
 
 
@@ -124,17 +154,22 @@ class LauncherWindow:
 
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
-        self.root.geometry("450x240")
-        self.root.resizable(False, False)
+        self.root.geometry("500x300")
+        self.root.minsize(500, 300)
+        self.root.resizable(True, False)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        self.status_var = tk.StringVar(value="A iniciar a aplicacao...")
-        self.info_var = tk.StringVar(value="Quando a app abrir no browser, pode minimizar esta janela.")
+        self.status_var = tk.StringVar(value="A iniciar o servidor local...")
+        self.info_var = tk.StringVar(
+            value="Aguarde alguns segundos. Se o browser nao abrir sozinho, use o botao abaixo."
+        )
         self.url_var = tk.StringVar(value=self.base_url)
+        self.log_var = tk.StringVar(value=str(LOG_PATH))
 
         self.open_button: ttk.Button | None = None
         self._load_window_icon()
         self._build_ui()
+        self.root.update_idletasks()
 
     def _load_window_icon(self) -> None:
         logo_path = Path(BUNDLE_ROOT) / "AutoCardoso.png"
@@ -162,73 +197,140 @@ class LauncherWindow:
         ttk.Label(
             frame,
             textvariable=self.status_var,
-            wraplength=290,
+            wraplength=340,
             justify="left",
         ).grid(row=1, column=1, pady=(8, 10), sticky="w")
         ttk.Label(
             frame,
             textvariable=self.info_var,
-            wraplength=390,
+            wraplength=440,
             justify="left",
         ).grid(row=2, column=0, columnspan=2, sticky="w")
         ttk.Label(
             frame,
-            text="Pasta dos dados:",
+            text="Endereco local da app:",
             font=("Segoe UI", 9, "bold"),
         ).grid(row=3, column=0, columnspan=2, pady=(14, 2), sticky="w")
         ttk.Label(
             frame,
-            text=str(APP_DATA_DIR),
-            wraplength=390,
+            textvariable=self.url_var,
+            wraplength=440,
             justify="left",
         ).grid(row=4, column=0, columnspan=2, sticky="w")
         ttk.Label(
             frame,
-            textvariable=self.url_var,
-            foreground="#4d4d4d",
-            wraplength=390,
+            text="Ficheiro de log:",
+            font=("Segoe UI", 9, "bold"),
+        ).grid(row=5, column=0, columnspan=2, pady=(14, 2), sticky="w")
+        ttk.Label(
+            frame,
+            textvariable=self.log_var,
+            wraplength=440,
             justify="left",
-        ).grid(row=5, column=0, columnspan=2, pady=(12, 0), sticky="w")
+        ).grid(row=6, column=0, columnspan=2, sticky="w")
 
         buttons = ttk.Frame(frame)
-        buttons.grid(row=6, column=0, columnspan=2, pady=(18, 0), sticky="ew")
+        buttons.grid(row=7, column=0, columnspan=2, pady=(18, 0), sticky="ew")
         buttons.columnconfigure(0, weight=1)
         buttons.columnconfigure(1, weight=1)
+        buttons.columnconfigure(2, weight=1)
 
         self.open_button = ttk.Button(buttons, text="Abrir inventario", command=self.open_browser, state="disabled")
         self.open_button.grid(row=0, column=0, padx=(0, 8), sticky="ew")
-        ttk.Button(buttons, text="Fechar", command=self.on_close).grid(row=0, column=1, sticky="ew")
+        ttk.Button(buttons, text="Abrir pasta dos dados", command=self.open_data_folder).grid(
+            row=0,
+            column=1,
+            padx=(0, 8),
+            sticky="ew",
+        )
+        ttk.Button(buttons, text="Fechar", command=self.on_close).grid(row=0, column=2, sticky="ew")
 
     def start(self) -> int:
+        LOGGER.info("Janela principal criada. A iniciar bootstrap.")
         self.server_thread.start()
         threading.Thread(target=self._bootstrap, daemon=True).start()
         self.root.mainloop()
+        LOGGER.info("Janela principal fechada.")
         return 0
 
     def _bootstrap(self) -> None:
         try:
-            esperar_servidor(self.base_url, self.server_thread, timeout=35)
+            esperar_servidor(self.base_url, self.server_thread, timeout=45)
             self.root.after(0, self._on_ready)
         except Exception as exc:
-            self.root.after(0, lambda: self._on_startup_error(exc))
+            LOGGER.exception("Falha no bootstrap do launcher.")
+            self.root.after(0, lambda exc=exc: self._on_startup_error(exc))
 
     def _on_ready(self) -> None:
-        self.status_var.set("Aplicacao pronta. A abrir no browser predefinido...")
-        self.info_var.set("Pode minimizar esta janela. Feche-a quando terminar para desligar a app.")
+        self.status_var.set("Aplicacao pronta.")
+        self.info_var.set(
+            "Vou tentar abrir o browser automaticamente. Se nao abrir, clique em 'Abrir inventario'."
+        )
         if self.open_button is not None:
             self.open_button.config(state="normal")
-        self.open_browser()
+        self.open_browser(auto=True)
 
     def _on_startup_error(self, exc: Exception) -> None:
         self.status_var.set("Falha ao arrancar a aplicacao.")
-        self.info_var.set("Feche esta janela e consulte a mensagem abaixo.")
-        messagebox.showerror(APP_TITLE, f"Nao foi possivel iniciar a aplicacao.\n\n{exc}")
+        self.info_var.set("Veja o ficheiro de log mostrado abaixo para perceber o erro.")
+        messagebox.showerror(
+            APP_TITLE,
+            f"Nao foi possivel iniciar a aplicacao.\n\n{exc}\n\nLog: {LOG_PATH}",
+        )
 
-    def open_browser(self) -> None:
-        webbrowser.open(self.base_url, new=1)
-        self.status_var.set("Aplicacao aberta no browser.")
+    def _open_browser_worker(self, auto: bool) -> None:
+        try:
+            LOGGER.info("A pedir ao Windows para abrir o browser. URL=%s | auto=%s", self.base_url, auto)
+            try:
+                os.startfile(self.base_url)
+            except AttributeError:
+                opened = webbrowser.open(self.base_url, new=1)
+                if not opened:
+                    raise RuntimeError("O Windows nao indicou um browser disponivel.")
+            except OSError:
+                opened = webbrowser.open(self.base_url, new=1)
+                if not opened:
+                    raise
+
+            self.root.after(0, lambda auto=auto: self._on_browser_opened(auto))
+        except Exception as exc:
+            LOGGER.exception("Falha ao abrir o browser automaticamente.")
+            self.root.after(0, lambda exc=exc: self._on_browser_error(exc))
+
+    def _on_browser_opened(self, auto: bool) -> None:
+        if auto:
+            self.status_var.set("Aplicacao pronta. Browser aberto automaticamente.")
+        else:
+            self.status_var.set("Aplicacao pronta. Pedido manual para abrir o browser enviado.")
+        self.info_var.set("Pode minimizar esta janela. Feche-a quando terminar para desligar a app.")
+
+    def _on_browser_error(self, exc: Exception) -> None:
+        self.status_var.set("Aplicacao pronta, mas o browser nao abriu automaticamente.")
+        self.info_var.set(
+            "Clique em 'Abrir inventario' ou abra manualmente o endereco acima. Se falhar, veja o ficheiro de log."
+        )
+        messagebox.showwarning(
+            APP_TITLE,
+            f"Nao foi possivel abrir o browser automaticamente.\n\n{exc}\n\nUse o botao 'Abrir inventario'.",
+        )
+
+    def open_browser(self, auto: bool = False) -> None:
+        if auto:
+            self.status_var.set("Aplicacao pronta. A pedir ao Windows para abrir o browser...")
+        else:
+            self.status_var.set("A tentar abrir o browser...")
+        threading.Thread(target=self._open_browser_worker, args=(auto,), daemon=True).start()
+
+    def open_data_folder(self) -> None:
+        LOGGER.info("A abrir pasta dos dados: %s", APP_DATA_DIR)
+        try:
+            os.startfile(str(APP_DATA_DIR))
+        except Exception as exc:
+            LOGGER.exception("Falha ao abrir a pasta dos dados.")
+            messagebox.showwarning(APP_TITLE, f"Nao foi possivel abrir a pasta dos dados.\n\n{exc}")
 
     def on_close(self) -> None:
+        LOGGER.info("Pedido de fecho do launcher.")
         self.server_thread.stop()
         self.root.destroy()
 
@@ -246,6 +348,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     """Ponto de entrada principal."""
+    configure_logging()
     args = parse_args()
     if args.smoke_test:
         return smoke_test()

@@ -9,6 +9,7 @@ O executavel foi montado assim:
 1. O frontend React e compilado com `vite build`.
 2. O backend FastAPI serve esse frontend compilado diretamente.
 3. Um launcher Windows (`backend/app/desktop_launcher.py`) arranca o servidor local, abre a app no browser e mostra uma janela pequena para manter a app ativa.
+   Esta parte agora escreve tambem um log em `%LOCALAPPDATA%\InventarioOficina\inventario_launcher.log`.
 4. O PyInstaller empacota tudo numa pasta final:
    - executavel
    - backend Python
@@ -121,3 +122,11 @@ O executavel ja foi validado com smoke test automatico durante o build. Esse tes
 - resposta do schema
 - exportacao Excel
 - frontend servido corretamente
+
+## Diagnostico no PC final
+
+Se a app abrir mas ficar presa ou nao abrir o browser no PC do utilizador, o primeiro sitio a ver e:
+
+```text
+%LOCALAPPDATA%\InventarioOficina\inventario_launcher.log
+```
