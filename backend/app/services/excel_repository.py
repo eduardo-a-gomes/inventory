@@ -272,11 +272,14 @@ class ExcelRepository:
             ).fetchone()
             return self._row_to_peca(row) if row else None
 
-    def registar_venda(self, peca_id: str, quantidade_vendida: int) -> Optional[RegistoVendaResultado]:
+    def registar_venda(self, peca_id: str, quantidade_vendida: int, preco_unitario: float) -> Optional[RegistoVendaResultado]:
         """Regista uma venda e reduz o stock da peca."""
         quantidade_vendida = max(0, int(quantidade_vendida))
         if quantidade_vendida <= 0:
             raise ValueError("Indica uma quantidade valida para a venda.")
+        preco_unitario = self._safe_price(preco_unitario)
+        if preco_unitario < 0:
+            raise ValueError("Indica um preco valido para a venda.")
 
         with self._lock, self._connect() as conn:
             row = conn.execute(
@@ -295,7 +298,7 @@ class ExcelRepository:
             if quantidade_vendida > stock_atual:
                 raise ValueError("A quantidade vendida nao pode ser superior ao stock atual.")
 
-            self._criar_registo_venda(conn, peca, quantidade_vendida)
+            self._criar_registo_venda(conn, peca, quantidade_vendida, preco_unitario)
 
             quantidade_restante = stock_atual - quantidade_vendida
             if quantidade_restante <= 0:
@@ -911,7 +914,13 @@ class ExcelRepository:
             extras=self._parse_extras(row["extras"]),
         )
 
-    def _criar_registo_venda(self, conn: sqlite3.Connection, peca: Peca, quantidade_vendida: int) -> None:
+    def _criar_registo_venda(
+        self,
+        conn: sqlite3.Connection,
+        peca: Peca,
+        quantidade_vendida: int,
+        preco_unitario: float,
+    ) -> None:
         """Guarda um snapshot da venda para analise futura."""
         conn.execute(
             """
@@ -928,7 +937,7 @@ class ExcelRepository:
                 peca.categoria,
                 peca.marca,
                 peca.designacao,
-                self._safe_price(peca.preco),
+                self._safe_price(preco_unitario),
                 max(1, int(quantidade_vendida)),
                 peca.local,
                 datetime.now().isoformat(timespec="seconds"),

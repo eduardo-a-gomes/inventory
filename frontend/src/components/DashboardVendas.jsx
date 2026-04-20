@@ -194,7 +194,7 @@ export default function DashboardVendas({ dashboard, loading }) {
                   <th>Designacao</th>
                   <th>Categoria</th>
                   <th>Qtd.</th>
-                  <th>Preco un.</th>
+                  <th>Preco venda</th>
                   <th>Total</th>
                 </tr>
               </thead>

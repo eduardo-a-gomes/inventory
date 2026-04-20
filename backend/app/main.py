@@ -200,7 +200,7 @@ def atualizar_quantidade(peca_id: str, payload: AtualizarQuantidadePayload) -> P
 def registar_venda(peca_id: str, payload: RegistarVendaPayload) -> RegistoVendaResultado:
     """Regista a venda de unidades e atualiza o stock atual."""
     try:
-        resultado = repo.registar_venda(peca_id, payload.quantidade)
+        resultado = repo.registar_venda(peca_id, payload.quantidade, payload.preco_unitario)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

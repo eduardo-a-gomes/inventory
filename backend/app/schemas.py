@@ -144,6 +144,7 @@ class RegistarVendaPayload(BaseModel):
     """Payload para registar a venda de uma ou mais unidades."""
 
     quantidade: int = Field(default=1, ge=1, description="Quantidade vendida.")
+    preco_unitario: float = Field(..., ge=0, description="Preco unitario real da venda.")
 
 
 class RegistoVendaResultado(BaseModel):

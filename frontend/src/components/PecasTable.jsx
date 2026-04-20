@@ -63,6 +63,16 @@ function IconeEliminar() {
   );
 }
 
+function IconeVenda() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16" />
+      <path d="M7 4h10l3 5-8 11-8-11 3-5z" />
+      <path d="M12 10v4" />
+    </svg>
+  );
+}
+
 function IconeGuardar() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -177,7 +187,7 @@ export default function PecasTable({
   onGuardarEdicao,
   onEliminar,
   onAlterarQuantidade,
-  onRegistarVenda,
+  onAbrirVenda,
   operacaoEmCursoId,
   ordenacao,
   onOrdenar,
@@ -192,6 +202,7 @@ export default function PecasTable({
   const totalColunas = colunasVisiveis.length + 1; // +1 da coluna de acoes.
   const classeDensidade = totalColunas >= 14 ? "tabela-ultra-compacta" : totalColunas >= 10 ? "tabela-compacta" : "";
   const tabelaRef = useRef(null);
+  const ultimoTokenNovoMaterialRef = useRef(tokenNovoMaterial);
   const [editandoId, setEditandoId] = useState(null);
   const [draft, setDraft] = useState({});
   const [criandoNovo, setCriandoNovo] = useState(false);
@@ -209,9 +220,10 @@ export default function PecasTable({
   }, [pecas, editandoId]);
 
   useEffect(() => {
-    if (!tokenNovoMaterial) {
+    if (!tokenNovoMaterial || tokenNovoMaterial === ultimoTokenNovoMaterialRef.current) {
       return;
     }
+    ultimoTokenNovoMaterialRef.current = tokenNovoMaterial;
 
     setEditandoId(null);
     setDraft({});
@@ -586,8 +598,8 @@ export default function PecasTable({
                               type="button"
                               className="botao-quantidade"
                               disabled={emCurso || bloquearLinha || peca.quantidade <= 0}
-                              onClick={() => onRegistarVenda?.(peca, 1)}
-                              title="Registar venda de 1 unidade"
+                              onClick={() => onAlterarQuantidade(peca, peca.quantidade - 1)}
+                              title="Reduzir stock"
                             >
                               -
                             </button>
@@ -642,6 +654,16 @@ export default function PecasTable({
                             title="Editar linha"
                           >
                             <IconeEditar />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="botao-acao botao-venda"
+                            onClick={() => onAbrirVenda?.(peca)}
+                            disabled={emCurso || bloquearLinha || peca.quantidade <= 0}
+                            title="Registar venda"
+                          >
+                            <IconeVenda />
                           </button>
 
                           <button

@@ -5,21 +5,14 @@ import DashboardVendas from "./components/DashboardVendas";
 import PecasTable from "./components/PecasTable";
 import SchemaManagerModal from "./components/SchemaManagerModal";
 import ToastStack from "./components/ToastStack";
+import VendaModal from "./components/VendaModal";
 
 const PESQUISA_DEBOUNCE_MS = 220;
 const QUANTIDADE_INICIAL_NOVO_MATERIAL = 1;
 const STORAGE_KEY_TEMA_FUNDO = "inventario-tema-fundo";
 const TEMAS_FUNDO = [
-  { id: "atual", nome: "Atual" },
-  { id: "oficina-limpa", nome: "Oficina limpa" },
-  { id: "oficina-premium", nome: "Oficina premium" },
-  { id: "oficina-industrial", nome: "Oficina industrial" },
-  { id: "oficina-classica", nome: "Oficina classica" },
-  { id: "retro-noite", nome: "Retro noite" },
-  { id: "classico-sombra", nome: "Classico sombra" },
-  { id: "motor-classico", nome: "Motor classico" },
-  { id: "motor-bw", nome: "Motor B&W" },
-  { id: "ferramenta-abstrata", nome: "Ferramenta abstrata" },
+  { id: "atual", nome: "Original" },
+  { id: "image-poster", nome: "Escort poster" },
 ];
 
 function IconeImprimir() {
@@ -127,6 +120,7 @@ export default function App() {
   const [tokenNovoMaterial, setTokenNovoMaterial] = useState(0);
   const [toasts, setToasts] = useState([]);
   const [confirmacao, setConfirmacao] = useState(null);
+  const [vendaModal, setVendaModal] = useState(null);
   const [dashboard, setDashboard] = useState(null);
   const [vistaAtiva, setVistaAtiva] = useState("inventario");
   const [temaFundo, setTemaFundo] = useState(() => {
@@ -409,22 +403,11 @@ export default function App() {
 
     if (quantidadeAnterior > 0 && novaQuantidade === 0) {
       abrirConfirmacao({
-        titulo: "Stock a zero",
-        mensagem: "Tem a certeza que quer deixar este material com stock zero?",
-        textoConfirmar: "Confirmar",
+        titulo: "Eliminar registo",
+        mensagem: "Ao reduzir para zero, este material sera removido do inventario. Pretende continuar?",
+        textoConfirmar: "Eliminar",
         perigo: true,
-        onConfirm: async () => {
-          setOperacaoEmCursoId(peca.id);
-          try {
-            await inventarioApi.atualizarQuantidade(peca.id, quantidade);
-            mostrarToast("sucesso", "Quantidade reduzida para zero.");
-            await sincronizarInventarioEDashboard(filtroAtual);
-          } catch (error) {
-            mostrarToast("erro", error.message);
-          } finally {
-            setOperacaoEmCursoId(null);
-          }
-        },
+        onConfirm: () => eliminarPeca(peca),
       });
       return;
     }
@@ -441,40 +424,42 @@ export default function App() {
     }
   };
 
-  const handleRegistarVenda = async (peca, quantidadeVendida = 1) => {
-    const quantidadeAtual = Number(peca.quantidade ?? 0);
-    const quantidadeFinal = Math.max(0, quantidadeAtual - Number(quantidadeVendida ?? 1));
+  const abrirVendaModal = (peca) => {
+    setVendaModal({ peca });
+  };
 
-    const executarVenda = async () => {
-      setOperacaoEmCursoId(peca.id);
-      try {
-        await inventarioApi.registarVenda(peca.id, quantidadeVendida);
-        const mensagemSucesso =
-          quantidadeFinal === 0
-            ? "Venda registada. Material esgotado e removido do inventario."
-            : "Venda registada com sucesso.";
-        mostrarToast("sucesso", mensagemSucesso);
-        await sincronizarInventarioEDashboard(filtroAtual);
-      } catch (error) {
-        mostrarToast("erro", error.message);
-      } finally {
-        setOperacaoEmCursoId(null);
-      }
-    };
+  const fecharVendaModal = () => {
+    if (operacaoEmCursoId) {
+      return;
+    }
+    setVendaModal(null);
+  };
 
-    if (quantidadeFinal === 0) {
-      abrirConfirmacao({
-        titulo: "Registar ultima unidade",
-        mensagem: `Ao vender esta unidade, "${peca.designacao}" deixa de aparecer no inventario ativo. Pretende continuar?`,
-        textoConfirmar: "Registar venda",
-        textoCancelar: "Cancelar",
-        perigo: true,
-        onConfirm: executarVenda,
-      });
+  const confirmarVenda = async (payload) => {
+    if (!vendaModal?.peca) {
       return;
     }
 
-    await executarVenda();
+    const peca = vendaModal.peca;
+    const quantidadeVendida = Math.max(1, Number(payload?.quantidade ?? 1));
+    const quantidadeAtual = Number(peca.quantidade ?? 0);
+    const quantidadeFinal = Math.max(0, quantidadeAtual - quantidadeVendida);
+
+    setOperacaoEmCursoId(peca.id);
+    try {
+      await inventarioApi.registarVenda(peca.id, payload);
+      const mensagemSucesso =
+        quantidadeFinal === 0
+          ? "Venda registada. Material esgotado e removido do inventario."
+          : "Venda registada com sucesso.";
+      mostrarToast("sucesso", mensagemSucesso);
+      setVendaModal(null);
+      await sincronizarInventarioEDashboard(filtroAtual);
+    } catch (error) {
+      mostrarToast("erro", error.message);
+    } finally {
+      setOperacaoEmCursoId(null);
+    }
   };
 
   const handlePesquisar = async (event) => {
@@ -783,7 +768,7 @@ export default function App() {
             onGuardarEdicao={handleGuardarEdicaoInline}
             onEliminar={handleEliminar}
             onAlterarQuantidade={handleAlterarQuantidade}
-            onRegistarVenda={handleRegistarVenda}
+            onAbrirVenda={abrirVendaModal}
             operacaoEmCursoId={operacaoEmCursoId}
             ordenacao={ordenacao}
             onOrdenar={handleOrdenar}
@@ -817,6 +802,14 @@ export default function App() {
         loading={loadingConfirmacao}
         onConfirm={confirmarAcao}
         onCancel={fecharConfirmacao}
+      />
+
+      <VendaModal
+        aberto={Boolean(vendaModal)}
+        peca={vendaModal?.peca}
+        loading={Boolean(vendaModal?.peca && operacaoEmCursoId === vendaModal.peca.id)}
+        onConfirm={confirmarVenda}
+        onCancel={fecharVendaModal}
       />
 
       <ToastStack itens={toasts} onFechar={removerToast} />

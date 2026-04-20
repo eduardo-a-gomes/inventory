@@ -182,10 +182,10 @@ export const inventarioApi = {
       body: JSON.stringify({ quantidade }),
     }),
 
-  registarVenda: (id, quantidade = 1) =>
+  registarVenda: (id, payload) =>
     request(`/pecas/${id}/venda`, {
       method: "POST",
-      body: JSON.stringify({ quantidade }),
+      body: JSON.stringify(payload),
     }),
 
   eliminarPeca: (id) =>

@@ -25,7 +25,7 @@ body,
 html {
   background: #121418;
   overflow-x: hidden;
-  overscroll-behavior-x: none;
+  overscroll-behavior: none;
 }
 
 body {
@@ -34,94 +34,36 @@ body {
   color: var(--texto);
   min-height: 100vh;
   overflow-x: hidden;
-  transition: background 0.28s ease;
+  background: transparent;
+  position: relative;
+  isolation: isolate;
 }
 
 body.tema-fundo-atual {
-  background:
+  --page-background:
     radial-gradient(circle at top right, rgba(45, 165, 108, 0.22), transparent 35%),
     linear-gradient(145deg, #121418 0%, #1c2027 50%, #151920 100%);
 }
 
-body.tema-fundo-oficina-limpa {
-  background:
-    linear-gradient(rgba(12, 16, 20, 0.7), rgba(12, 16, 20, 0.7)),
-    url("/fundos/oficina-limpa.jpg");
-  background-position: center;
-  background-size: cover;
-  background-attachment: fixed;
+body.tema-fundo-image-poster {
+  --page-background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.03) 18%, transparent 38%),
+    radial-gradient(circle at center, transparent 0%, transparent 42%, rgba(5, 7, 10, 0.78) 100%),
+    linear-gradient(rgba(10, 12, 14, 0.66), rgba(10, 12, 14, 0.66)),
+    url("/escort-poster.png");
 }
 
-body.tema-fundo-oficina-premium {
-  background:
-    linear-gradient(rgba(10, 13, 17, 0.74), rgba(10, 13, 17, 0.74)),
-    url("/fundos/oficina-premium.jpg");
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--page-background, linear-gradient(145deg, #121418 0%, #1c2027 50%, #151920 100%));
   background-position: center;
   background-size: cover;
-  background-attachment: fixed;
-}
-
-body.tema-fundo-oficina-industrial {
-  background:
-    linear-gradient(rgba(14, 17, 20, 0.72), rgba(14, 17, 20, 0.72)),
-    url("/fundos/oficina-industrial.jpg");
-  background-position: center;
-  background-size: cover;
-  background-attachment: fixed;
-}
-
-body.tema-fundo-oficina-classica {
-  background:
-    linear-gradient(rgba(16, 14, 13, 0.76), rgba(16, 14, 13, 0.76)),
-    url("/fundos/oficina-classica.jpg");
-  background-position: center;
-  background-size: cover;
-  background-attachment: fixed;
-}
-
-body.tema-fundo-retro-noite {
-  background:
-    linear-gradient(rgba(14, 12, 10, 0.74), rgba(14, 12, 10, 0.74)),
-    url("/fundos/retro-noite.jpg");
-  background-position: center;
-  background-size: cover;
-  background-attachment: fixed;
-}
-
-body.tema-fundo-classico-sombra {
-  background:
-    linear-gradient(rgba(9, 11, 14, 0.76), rgba(9, 11, 14, 0.76)),
-    url("/fundos/classico-sombra.jpg");
-  background-position: center;
-  background-size: cover;
-  background-attachment: fixed;
-}
-
-body.tema-fundo-motor-classico {
-  background:
-    linear-gradient(rgba(14, 12, 11, 0.72), rgba(14, 12, 11, 0.72)),
-    url("/fundos/motor-classico.jpg");
-  background-position: center;
-  background-size: cover;
-  background-attachment: fixed;
-}
-
-body.tema-fundo-motor-bw {
-  background:
-    linear-gradient(rgba(12, 14, 16, 0.68), rgba(12, 14, 16, 0.68)),
-    url("/fundos/motor-bw.jpg");
-  background-position: center;
-  background-size: cover;
-  background-attachment: fixed;
-}
-
-body.tema-fundo-ferramenta-abstrata {
-  background:
-    linear-gradient(rgba(14, 12, 10, 0.72), rgba(14, 12, 10, 0.72)),
-    url("/fundos/ferramenta-abstrata.jpg");
-  background-position: center;
-  background-size: cover;
-  background-attachment: fixed;
+  background-repeat: no-repeat;
+  transform: translateZ(0);
 }
 
 .app {
@@ -324,40 +266,12 @@ body.tema-fundo-ferramenta-abstrata {
   background: linear-gradient(135deg, #2da56c, #121418);
 }
 
-.swatch-fundo-oficina-limpa {
-  background-image: url("/fundos/oficina-limpa.jpg");
-}
-
-.swatch-fundo-oficina-premium {
-  background-image: url("/fundos/oficina-premium.jpg");
-}
-
-.swatch-fundo-oficina-industrial {
-  background-image: url("/fundos/oficina-industrial.jpg");
-}
-
-.swatch-fundo-oficina-classica {
-  background-image: url("/fundos/oficina-classica.jpg");
-}
-
-.swatch-fundo-retro-noite {
-  background-image: url("/fundos/retro-noite.jpg");
-}
-
-.swatch-fundo-classico-sombra {
-  background-image: url("/fundos/classico-sombra.jpg");
-}
-
-.swatch-fundo-motor-classico {
-  background-image: url("/fundos/motor-classico.jpg");
-}
-
-.swatch-fundo-motor-bw {
-  background-image: url("/fundos/motor-bw.jpg");
-}
-
-.swatch-fundo-ferramenta-abstrata {
-  background-image: url("/fundos/ferramenta-abstrata.jpg");
+.swatch-fundo-image-poster {
+  background:
+    radial-gradient(circle at center, transparent 0%, transparent 44%, rgba(5, 7, 10, 0.68) 100%),
+    url("/escort-poster.png");
+  background-position: center;
+  background-size: cover;
 }
 
 .pesquisa {
@@ -697,7 +611,7 @@ th {
 }
 
 .coluna-acoes {
-  width: 92px;
+  width: 132px;
 }
 
 .botao-ordenar {
@@ -877,7 +791,7 @@ th {
 }
 
 .tabela-wrapper.tabela-ultra-compacta .coluna-acoes {
-  width: 72px;
+  width: 96px;
 }
 
 .tabela-wrapper.tabela-ultra-compacta .th-conteudo {
@@ -950,6 +864,14 @@ th {
 
 .botao-eliminar {
   background: #a73232;
+}
+
+.botao-venda {
+  background: #7b5f1f;
+}
+
+.modal-venda-card {
+  width: min(420px, 92vw);
 }
 
 .dashboard-kpis {
@@ -1213,15 +1135,7 @@ th {
     --gutter-x: 0.9rem;
   }
 
-  body.tema-fundo-oficina-limpa,
-  body.tema-fundo-oficina-premium,
-  body.tema-fundo-oficina-industrial,
-  body.tema-fundo-oficina-classica,
-  body.tema-fundo-retro-noite,
-  body.tema-fundo-classico-sombra,
-  body.tema-fundo-motor-classico,
-  body.tema-fundo-motor-bw,
-  body.tema-fundo-ferramenta-abstrata {
+  body::before {
     background-attachment: scroll;
   }
 
