@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Optional
 from typing import Union
@@ -139,6 +140,20 @@ class AtualizarQuantidadePayload(BaseModel):
     quantidade: int = Field(..., ge=0, description="Novo valor absoluto de quantidade.")
 
 
+class RegistarVendaPayload(BaseModel):
+    """Payload para registar a venda de uma ou mais unidades."""
+
+    quantidade: int = Field(default=1, ge=1, description="Quantidade vendida.")
+
+
+class RegistoVendaResultado(BaseModel):
+    """Resposta apos registar uma venda."""
+
+    removida_do_inventario: bool
+    quantidade_restante: int = Field(ge=0)
+    peca: Optional["Peca"] = None
+
+
 class ColunaSchema(BaseModel):
     """Representa uma coluna do schema atual."""
 
@@ -203,3 +218,46 @@ class ReordenarColunasPayload(BaseModel):
         if not resultado:
             raise ValueError("Indica a ordem das colunas.")
         return resultado
+
+
+class VendaHistoricoItem(BaseModel):
+    """Linha do historico de materiais vendidos."""
+
+    id: str = Field(..., min_length=1)
+    peca_id: Optional[str] = None
+    referencia: str = Field(default="", max_length=MAX_TEXTO_MATERIAL)
+    categoria: str = Field(default="", max_length=MAX_TEXTO_MATERIAL)
+    marca: str = Field(default="", max_length=MAX_TEXTO_MATERIAL)
+    designacao: str = Field(default="", max_length=MAX_TEXTO_MATERIAL)
+    local: Optional[str] = Field(default=None, max_length=MAX_TEXTO_MATERIAL)
+    preco_unitario: float = Field(default=0, ge=0)
+    quantidade_vendida: int = Field(default=1, ge=1)
+    total_venda: float = Field(default=0, ge=0)
+    vendida_em: datetime
+    extras: dict[str, ValorExtra] = Field(default_factory=dict)
+
+
+class DashboardSerieValor(BaseModel):
+    """Ponto simples para graficos do dashboard."""
+
+    etiqueta: str = Field(..., min_length=1)
+    valor: float = Field(default=0, ge=0)
+
+
+class DashboardResumoVendas(BaseModel):
+    """Resumo principal do dashboard de vendas."""
+
+    faturacao_total: float = Field(default=0, ge=0)
+    valor_em_stock: float = Field(default=0, ge=0)
+    total_vendas: int = Field(default=0, ge=0)
+    unidades_vendidas: int = Field(default=0, ge=0)
+
+
+class DashboardVendas(BaseModel):
+    """Dados completos do dashboard de vendas."""
+
+    resumo: DashboardResumoVendas
+    faturacao_por_mes: list[DashboardSerieValor] = Field(default_factory=list)
+    valor_stock_por_categoria: list[DashboardSerieValor] = Field(default_factory=list)
+    faturacao_por_material: list[DashboardSerieValor] = Field(default_factory=list)
+    historico: list[VendaHistoricoItem] = Field(default_factory=list)

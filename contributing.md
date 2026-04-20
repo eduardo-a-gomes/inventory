@@ -1,0 +1,1 @@
+sempre que fores acrescentar codigo, certifica-te que tas a fazer de forma que seja possivelm continuar a compilar corretamente

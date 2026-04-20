@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 import re
@@ -14,7 +15,17 @@ from uuid import uuid4
 
 from openpyxl import Workbook
 from app.core.config import LEGACY_EXCEL_PATH, LEGACY_EXCEL_SHEET_NAME, SQLITE_DB_PATH
-from app.schemas import ColunaSchema, Peca, PecaCreate, PecaUpdate
+from app.schemas import (
+    ColunaSchema,
+    DashboardResumoVendas,
+    DashboardSerieValor,
+    DashboardVendas,
+    Peca,
+    PecaCreate,
+    PecaUpdate,
+    RegistoVendaResultado,
+    VendaHistoricoItem,
+)
 
 
 class ExcelRepository:
@@ -60,6 +71,87 @@ class ExcelRepository:
 
             termo_normalizado = termo.strip().lower()
             return [peca for peca in pecas if self._match_termo(peca, termo_normalizado)]
+
+    def listar_vendas(self) -> List[VendaHistoricoItem]:
+        """Lista o historico de vendas mais recentes."""
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, peca_id, referencia, categoria, marca, designacao, local,
+                       preco_unitario, quantidade_vendida, vendida_em, extras
+                FROM vendas
+                ORDER BY vendida_em DESC, id DESC
+                """
+            ).fetchall()
+            return [self._row_to_venda(row) for row in rows]
+
+    def obter_dashboard_vendas(self) -> DashboardVendas:
+        """Constroi o dashboard com historico, faturacao e valor atual em stock."""
+        historico = self.listar_vendas()
+        pecas = self.listar()
+
+        faturacao_total = round(sum(venda.total_venda for venda in historico), 2)
+        valor_em_stock = round(sum(self._safe_price(peca.preco) * max(0, int(peca.quantidade)) for peca in pecas), 2)
+        total_vendas = len(historico)
+        unidades_vendidas = sum(max(0, int(venda.quantidade_vendida)) for venda in historico)
+
+        faturacao_por_mes_map: Dict[str, float] = {}
+        for venda in historico:
+            chave = venda.vendida_em.strftime("%Y-%m")
+            faturacao_por_mes_map[chave] = round(faturacao_por_mes_map.get(chave, 0) + venda.total_venda, 2)
+
+        faturacao_por_mes = [
+            DashboardSerieValor(etiqueta=self._formatar_mes_dashboard(chave), valor=valor)
+            for chave, valor in sorted(faturacao_por_mes_map.items())
+        ]
+
+        valor_stock_por_categoria_map: Dict[str, float] = {}
+        for peca in pecas:
+            categoria = str(peca.categoria or "").strip() or "Sem categoria"
+            valor_peca = round(self._safe_price(peca.preco) * max(0, int(peca.quantidade)), 2)
+            if valor_peca <= 0:
+                continue
+            valor_stock_por_categoria_map[categoria] = round(
+                valor_stock_por_categoria_map.get(categoria, 0) + valor_peca,
+                2,
+            )
+
+        valor_stock_por_categoria = [
+            DashboardSerieValor(etiqueta=etiqueta, valor=valor)
+            for etiqueta, valor in sorted(
+                valor_stock_por_categoria_map.items(),
+                key=lambda item: (-item[1], item[0].lower()),
+            )[:8]
+        ]
+
+        faturacao_por_material_map: Dict[str, float] = {}
+        for venda in historico:
+            etiqueta = self._montar_etiqueta_material(venda.referencia, venda.designacao)
+            faturacao_por_material_map[etiqueta] = round(
+                faturacao_por_material_map.get(etiqueta, 0) + venda.total_venda,
+                2,
+            )
+
+        faturacao_por_material = [
+            DashboardSerieValor(etiqueta=etiqueta, valor=valor)
+            for etiqueta, valor in sorted(
+                faturacao_por_material_map.items(),
+                key=lambda item: (-item[1], item[0].lower()),
+            )[:8]
+        ]
+
+        return DashboardVendas(
+            resumo=DashboardResumoVendas(
+                faturacao_total=faturacao_total,
+                valor_em_stock=valor_em_stock,
+                total_vendas=total_vendas,
+                unidades_vendidas=unidades_vendidas,
+            ),
+            faturacao_por_mes=faturacao_por_mes,
+            valor_stock_por_categoria=valor_stock_por_categoria,
+            faturacao_por_material=faturacao_por_material,
+            historico=historico,
+        )
 
     def obter_por_id(self, peca_id: str) -> Optional[Peca]:
         """Procura uma peca pelo ID."""
@@ -179,6 +271,63 @@ class ExcelRepository:
                 (peca_id,),
             ).fetchone()
             return self._row_to_peca(row) if row else None
+
+    def registar_venda(self, peca_id: str, quantidade_vendida: int) -> Optional[RegistoVendaResultado]:
+        """Regista uma venda e reduz o stock da peca."""
+        quantidade_vendida = max(0, int(quantidade_vendida))
+        if quantidade_vendida <= 0:
+            raise ValueError("Indica uma quantidade valida para a venda.")
+
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id, referencia, categoria, marca, designacao, preco, quantidade, local, extras
+                FROM pecas
+                WHERE id = ?
+                """,
+                (peca_id,),
+            ).fetchone()
+            if not row:
+                return None
+
+            peca = self._row_to_peca(row)
+            stock_atual = max(0, int(peca.quantidade))
+            if quantidade_vendida > stock_atual:
+                raise ValueError("A quantidade vendida nao pode ser superior ao stock atual.")
+
+            self._criar_registo_venda(conn, peca, quantidade_vendida)
+
+            quantidade_restante = stock_atual - quantidade_vendida
+            if quantidade_restante <= 0:
+                conn.execute("DELETE FROM pecas WHERE id = ?", (peca_id,))
+                conn.commit()
+                return RegistoVendaResultado(
+                    removida_do_inventario=True,
+                    quantidade_restante=0,
+                    peca=None,
+                )
+
+            conn.execute(
+                "UPDATE pecas SET quantidade = ? WHERE id = ?",
+                (quantidade_restante, peca_id),
+            )
+            conn.commit()
+
+            return RegistoVendaResultado(
+                removida_do_inventario=False,
+                quantidade_restante=quantidade_restante,
+                peca=Peca(
+                    id=peca.id,
+                    referencia=peca.referencia,
+                    categoria=peca.categoria,
+                    marca=peca.marca,
+                    designacao=peca.designacao,
+                    preco=peca.preco,
+                    quantidade=quantidade_restante,
+                    local=peca.local,
+                    extras=peca.extras,
+                ),
+            )
 
     def eliminar(self, peca_id: str) -> bool:
         """Elimina uma peca pelo ID."""
@@ -467,6 +616,23 @@ class ExcelRepository:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS vendas (
+                    id TEXT PRIMARY KEY,
+                    peca_id TEXT,
+                    referencia TEXT NOT NULL,
+                    categoria TEXT NOT NULL,
+                    marca TEXT NOT NULL,
+                    designacao TEXT NOT NULL,
+                    preco_unitario REAL NOT NULL DEFAULT 0,
+                    quantidade_vendida INTEGER NOT NULL DEFAULT 1,
+                    local TEXT,
+                    vendida_em TEXT NOT NULL,
+                    extras TEXT NOT NULL DEFAULT '{}'
+                )
+                """
+            )
 
             for coluna in self._core_columns:
                 conn.execute(
@@ -719,6 +885,57 @@ class ExcelRepository:
             extras=self._parse_extras(row["extras"]),
         )
 
+    def _row_to_venda(self, row: sqlite3.Row) -> VendaHistoricoItem:
+        """Converte linha SQL de venda num item do historico."""
+        preco_unitario = self._safe_price(row["preco_unitario"])
+        quantidade_vendida = max(1, int(row["quantidade_vendida"]))
+        total_venda = round(preco_unitario * quantidade_vendida, 2)
+        vendida_em_raw = str(row["vendida_em"] or "").strip()
+        try:
+            vendida_em = datetime.fromisoformat(vendida_em_raw)
+        except ValueError:
+            vendida_em = datetime.now()
+
+        return VendaHistoricoItem(
+            id=row["id"],
+            peca_id=row["peca_id"],
+            referencia=row["referencia"],
+            categoria=row["categoria"],
+            marca=row["marca"],
+            designacao=row["designacao"],
+            local=row["local"],
+            preco_unitario=preco_unitario,
+            quantidade_vendida=quantidade_vendida,
+            total_venda=total_venda,
+            vendida_em=vendida_em,
+            extras=self._parse_extras(row["extras"]),
+        )
+
+    def _criar_registo_venda(self, conn: sqlite3.Connection, peca: Peca, quantidade_vendida: int) -> None:
+        """Guarda um snapshot da venda para analise futura."""
+        conn.execute(
+            """
+            INSERT INTO vendas (
+                id, peca_id, referencia, categoria, marca, designacao,
+                preco_unitario, quantidade_vendida, local, vendida_em, extras
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid4()),
+                peca.id,
+                peca.referencia,
+                peca.categoria,
+                peca.marca,
+                peca.designacao,
+                self._safe_price(peca.preco),
+                max(1, int(quantidade_vendida)),
+                peca.local,
+                datetime.now().isoformat(timespec="seconds"),
+                json.dumps(peca.extras or {}, ensure_ascii=False),
+            ),
+        )
+
     @staticmethod
     def _normalizar_ordem_colunas(colunas: List[ColunaSchema]) -> List[ColunaSchema]:
         """Mantem Preco imediatamente antes de Quantidade, independentemente da ordem guardada."""
@@ -794,3 +1011,23 @@ class ExcelRepository:
             ]
         ).lower()
         return termo in conjunto
+
+    @staticmethod
+    def _formatar_mes_dashboard(chave_mes: str) -> str:
+        """Converte YYYY-MM numa etiqueta curta para o dashboard."""
+        try:
+            data = datetime.strptime(chave_mes, "%Y-%m")
+        except ValueError:
+            return chave_mes
+
+        meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+        return f"{meses[data.month - 1]} {data.year}"
+
+    @staticmethod
+    def _montar_etiqueta_material(referencia: object, designacao: object) -> str:
+        """Gera uma etiqueta curta para graficos por material."""
+        referencia_texto = str(referencia or "").strip()
+        designacao_texto = str(designacao or "").strip()
+        if referencia_texto and designacao_texto:
+            return f"{referencia_texto} - {designacao_texto}"
+        return referencia_texto or designacao_texto or "Material sem nome"

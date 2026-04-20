@@ -1,12 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { inventarioApi } from "./api";
 import ConfirmModal from "./components/ConfirmModal";
+import DashboardVendas from "./components/DashboardVendas";
 import PecasTable from "./components/PecasTable";
 import SchemaManagerModal from "./components/SchemaManagerModal";
 import ToastStack from "./components/ToastStack";
 
 const PESQUISA_DEBOUNCE_MS = 220;
 const QUANTIDADE_INICIAL_NOVO_MATERIAL = 1;
+const STORAGE_KEY_TEMA_FUNDO = "inventario-tema-fundo";
+const TEMAS_FUNDO = [
+  { id: "atual", nome: "Atual" },
+  { id: "oficina-limpa", nome: "Oficina limpa" },
+  { id: "oficina-premium", nome: "Oficina premium" },
+  { id: "oficina-industrial", nome: "Oficina industrial" },
+  { id: "oficina-classica", nome: "Oficina classica" },
+  { id: "retro-noite", nome: "Retro noite" },
+  { id: "classico-sombra", nome: "Classico sombra" },
+  { id: "motor-classico", nome: "Motor classico" },
+  { id: "motor-bw", nome: "Motor B&W" },
+  { id: "ferramenta-abstrata", nome: "Ferramenta abstrata" },
+];
 
 function IconeImprimir() {
   return (
@@ -32,6 +46,26 @@ function IconeMais() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function IconeDashboard() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 19V10" />
+      <path d="M12 19V5" />
+      <path d="M20 19v-8" />
+    </svg>
+  );
+}
+
+function IconeFundos() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3l9 4.5-9 4.5-9-4.5L12 3z" />
+      <path d="M3 12l9 4.5 9-4.5" />
+      <path d="M3 16.5l9 4.5 9-4.5" />
     </svg>
   );
 }
@@ -81,6 +115,7 @@ export default function App() {
   const [pecas, setPecas] = useState([]);
   const [colunas, setColunas] = useState([]);
   const [loadingLista, setLoadingLista] = useState(true);
+  const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [loadingForm, setLoadingForm] = useState(false);
   const [loadingSchema, setLoadingSchema] = useState(false);
   const [loadingConfirmacao, setLoadingConfirmacao] = useState(false);
@@ -92,6 +127,18 @@ export default function App() {
   const [tokenNovoMaterial, setTokenNovoMaterial] = useState(0);
   const [toasts, setToasts] = useState([]);
   const [confirmacao, setConfirmacao] = useState(null);
+  const [dashboard, setDashboard] = useState(null);
+  const [vistaAtiva, setVistaAtiva] = useState("inventario");
+  const [temaFundo, setTemaFundo] = useState(() => {
+    if (typeof window === "undefined") {
+      return "atual";
+    }
+
+    const temaGuardado = window.localStorage.getItem(STORAGE_KEY_TEMA_FUNDO);
+    return TEMAS_FUNDO.some((tema) => tema.id === temaGuardado) ? temaGuardado : "atual";
+  });
+  const [seletorFundosAberto, setSeletorFundosAberto] = useState(false);
+  const seletorFundosRef = useRef(null);
 
   const mostrarToast = (tipo, mensagem) => {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -144,6 +191,22 @@ export default function App() {
     }
   };
 
+  const carregarDashboard = async () => {
+    setLoadingDashboard(true);
+    try {
+      const data = await inventarioApi.obterDashboardVendas();
+      setDashboard(data);
+    } catch (error) {
+      mostrarToast("erro", error.message);
+    } finally {
+      setLoadingDashboard(false);
+    }
+  };
+
+  const sincronizarInventarioEDashboard = async (termo = filtroAtual) => {
+    await Promise.all([carregarPecas(termo), carregarDashboard()]);
+  };
+
   const carregarColunas = async () => {
     try {
       const data = await inventarioApi.listarColunas();
@@ -158,7 +221,33 @@ export default function App() {
   useEffect(() => {
     carregarPecas();
     carregarColunas();
+    carregarDashboard();
   }, []);
+
+  useEffect(() => {
+    const classesTemas = TEMAS_FUNDO.map((tema) => `tema-fundo-${tema.id}`);
+    document.body.classList.remove(...classesTemas);
+    document.body.classList.add(`tema-fundo-${temaFundo}`);
+    window.localStorage.setItem(STORAGE_KEY_TEMA_FUNDO, temaFundo);
+  }, [temaFundo]);
+
+  useEffect(() => {
+    if (!seletorFundosAberto) {
+      return undefined;
+    }
+
+    const fecharAoClicarFora = (event) => {
+      if (seletorFundosRef.current?.contains(event.target)) {
+        return;
+      }
+      setSeletorFundosAberto(false);
+    };
+
+    document.addEventListener("mousedown", fecharAoClicarFora);
+    return () => {
+      document.removeEventListener("mousedown", fecharAoClicarFora);
+    };
+  }, [seletorFundosAberto]);
 
   useEffect(() => {
     if (!ordenacao.campo || !colunas.length) {
@@ -254,7 +343,7 @@ export default function App() {
     try {
       await inventarioApi.criarPeca(payload);
       mostrarToast("sucesso", "Nova peca adicionada ao inventario.");
-      await carregarPecas(filtroAtual);
+      await sincronizarInventarioEDashboard(filtroAtual);
       return true;
     } catch (error) {
       const mensagem = String(error?.message || "Erro ao adicionar material.");
@@ -274,7 +363,7 @@ export default function App() {
     try {
       await inventarioApi.atualizarPeca(peca.id, payload);
       mostrarToast("sucesso", "Material atualizado.");
-      await carregarPecas(filtroAtual);
+      await sincronizarInventarioEDashboard(filtroAtual);
       return true;
     } catch (error) {
       mostrarToast("erro", error.message);
@@ -289,7 +378,7 @@ export default function App() {
     try {
       await inventarioApi.eliminarPeca(peca.id);
       mostrarToast("sucesso", "Material eliminado com sucesso.");
-      await carregarPecas(filtroAtual);
+      await sincronizarInventarioEDashboard(filtroAtual);
     } catch (error) {
       mostrarToast("erro", error.message);
     } finally {
@@ -320,11 +409,22 @@ export default function App() {
 
     if (quantidadeAnterior > 0 && novaQuantidade === 0) {
       abrirConfirmacao({
-        titulo: "Eliminar registo",
-        mensagem: "Tem a certeza que quer eliminar este registo?",
-        textoConfirmar: "Eliminar",
+        titulo: "Stock a zero",
+        mensagem: "Tem a certeza que quer deixar este material com stock zero?",
+        textoConfirmar: "Confirmar",
         perigo: true,
-        onConfirm: () => eliminarPeca(peca),
+        onConfirm: async () => {
+          setOperacaoEmCursoId(peca.id);
+          try {
+            await inventarioApi.atualizarQuantidade(peca.id, quantidade);
+            mostrarToast("sucesso", "Quantidade reduzida para zero.");
+            await sincronizarInventarioEDashboard(filtroAtual);
+          } catch (error) {
+            mostrarToast("erro", error.message);
+          } finally {
+            setOperacaoEmCursoId(null);
+          }
+        },
       });
       return;
     }
@@ -333,12 +433,48 @@ export default function App() {
     try {
       await inventarioApi.atualizarQuantidade(peca.id, quantidade);
       mostrarToast("sucesso", mensagemSucesso);
-      await carregarPecas(filtroAtual);
+      await sincronizarInventarioEDashboard(filtroAtual);
     } catch (error) {
       mostrarToast("erro", error.message);
     } finally {
       setOperacaoEmCursoId(null);
     }
+  };
+
+  const handleRegistarVenda = async (peca, quantidadeVendida = 1) => {
+    const quantidadeAtual = Number(peca.quantidade ?? 0);
+    const quantidadeFinal = Math.max(0, quantidadeAtual - Number(quantidadeVendida ?? 1));
+
+    const executarVenda = async () => {
+      setOperacaoEmCursoId(peca.id);
+      try {
+        await inventarioApi.registarVenda(peca.id, quantidadeVendida);
+        const mensagemSucesso =
+          quantidadeFinal === 0
+            ? "Venda registada. Material esgotado e removido do inventario."
+            : "Venda registada com sucesso.";
+        mostrarToast("sucesso", mensagemSucesso);
+        await sincronizarInventarioEDashboard(filtroAtual);
+      } catch (error) {
+        mostrarToast("erro", error.message);
+      } finally {
+        setOperacaoEmCursoId(null);
+      }
+    };
+
+    if (quantidadeFinal === 0) {
+      abrirConfirmacao({
+        titulo: "Registar ultima unidade",
+        mensagem: `Ao vender esta unidade, "${peca.designacao}" deixa de aparecer no inventario ativo. Pretende continuar?`,
+        textoConfirmar: "Registar venda",
+        textoCancelar: "Cancelar",
+        perigo: true,
+        onConfirm: executarVenda,
+      });
+      return;
+    }
+
+    await executarVenda();
   };
 
   const handlePesquisar = async (event) => {
@@ -539,6 +675,39 @@ export default function App() {
           </div>
 
           <div className="acoes-topo">
+            <div className="fundo-picker" ref={seletorFundosRef}>
+              <button
+                type="button"
+                className="botao-iconico botao-fundos-toggle"
+                title="Escolher fundo"
+                onClick={() => setSeletorFundosAberto((anterior) => !anterior)}
+              >
+                <IconeFundos />
+              </button>
+
+              {seletorFundosAberto ? (
+                <div className="menu-fundos">
+                  <p>Fundos</p>
+                  <div className="lista-fundos">
+                    {TEMAS_FUNDO.map((tema) => (
+                      <button
+                        key={tema.id}
+                        type="button"
+                        className={`botao-fundo-opcao${temaFundo === tema.id ? " ativa" : ""}`}
+                        onClick={() => {
+                          setTemaFundo(tema.id);
+                          setSeletorFundosAberto(false);
+                        }}
+                      >
+                        <span className={`swatch-fundo swatch-fundo-${tema.id}`} aria-hidden="true" />
+                        <span>{tema.nome}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             <button type="button" className="botao-iconico" onClick={handleImprimir} title="Imprimir tabela da base de dados">
               <IconeImprimir />
             </button>
@@ -548,47 +717,83 @@ export default function App() {
           </div>
         </div>
 
-        <form className="pesquisa" onSubmit={handlePesquisar}>
-          <input
-            type="search"
-            placeholder="Pesquisar por referencia, marca, designacao..."
-            value={pesquisa}
-            onChange={(event) => setPesquisa(event.target.value)}
-          />
-          <button type="submit">Pesquisar</button>
-          <button type="button" className="botao-secundario" onClick={() => setModalSchemaAberto(true)}>
-            Gerir colunas
-          </button>
-        </form>
-
-        <div className="acoes-pesquisa-inferior">
+        <div className="nav-vistas">
           <button
             type="button"
-            className="botao-novo-material"
-            onClick={() => setTokenNovoMaterial((anterior) => anterior + 1)}
-            title="Adicionar novo material ao inventario"
+            className={`botao-vista${vistaAtiva === "inventario" ? " ativa" : ""}`}
+            onClick={() => setVistaAtiva("inventario")}
           >
-            <IconeMais />
-            <span>Novo material</span>
+            Inventario
+          </button>
+          <button
+            type="button"
+            className={`botao-vista${vistaAtiva === "dashboard" ? " ativa" : ""}`}
+            onClick={() => setVistaAtiva("dashboard")}
+          >
+            <IconeDashboard />
+            <span>Dashboard vendas</span>
           </button>
         </div>
+
+        {vistaAtiva === "inventario" ? (
+          <>
+            <form className="pesquisa" onSubmit={handlePesquisar}>
+              <input
+                type="search"
+                placeholder="Pesquisar por referencia, marca, designacao..."
+                value={pesquisa}
+                onChange={(event) => setPesquisa(event.target.value)}
+              />
+              <button type="submit">Pesquisar</button>
+              <button type="button" className="botao-secundario" onClick={() => setModalSchemaAberto(true)}>
+                Gerir colunas
+              </button>
+            </form>
+
+            <div className="acoes-pesquisa-inferior">
+              <button
+                type="button"
+                className="botao-novo-material"
+                onClick={() => setTokenNovoMaterial((anterior) => anterior + 1)}
+                title="Adicionar novo material ao inventario"
+              >
+                <IconeMais />
+                <span>Novo material</span>
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="painel-dashboard-resumo">
+            <p className="estado">
+              Cada clique no botao "-" da quantidade passa a ficar registado como venda e entra no historico do dashboard.
+            </p>
+            <button type="button" className="botao-secundario" onClick={carregarDashboard}>
+              Atualizar dashboard
+            </button>
+          </div>
+        )}
       </header>
 
       <section className="layout-principal">
-        <PecasTable
-          pecas={pecasOrdenadas}
-          colunas={colunas}
-          loading={loadingLista}
-          onGuardarEdicao={handleGuardarEdicaoInline}
-          onEliminar={handleEliminar}
-          onAlterarQuantidade={handleAlterarQuantidade}
-          operacaoEmCursoId={operacaoEmCursoId}
-          ordenacao={ordenacao}
-          onOrdenar={handleOrdenar}
-          tokenNovoMaterial={tokenNovoMaterial}
-          loadingCriacao={loadingForm}
-          onCriarNovo={handleCriarNovoInline}
-        />
+        {vistaAtiva === "inventario" ? (
+          <PecasTable
+            pecas={pecasOrdenadas}
+            colunas={colunas}
+            loading={loadingLista}
+            onGuardarEdicao={handleGuardarEdicaoInline}
+            onEliminar={handleEliminar}
+            onAlterarQuantidade={handleAlterarQuantidade}
+            onRegistarVenda={handleRegistarVenda}
+            operacaoEmCursoId={operacaoEmCursoId}
+            ordenacao={ordenacao}
+            onOrdenar={handleOrdenar}
+            tokenNovoMaterial={tokenNovoMaterial}
+            loadingCriacao={loadingForm}
+            onCriarNovo={handleCriarNovoInline}
+          />
+        ) : (
+          <DashboardVendas dashboard={dashboard} loading={loadingDashboard} />
+        )}
       </section>
 
       <SchemaManagerModal

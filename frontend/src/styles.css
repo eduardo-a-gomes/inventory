@@ -31,12 +31,97 @@ html {
 body {
   margin: 0;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background:
-    radial-gradient(circle at top right, rgba(45, 165, 108, 0.22), transparent 35%),
-    linear-gradient(145deg, #121418 0%, #1c2027 50%, #151920 100%);
   color: var(--texto);
   min-height: 100vh;
   overflow-x: hidden;
+  transition: background 0.28s ease;
+}
+
+body.tema-fundo-atual {
+  background:
+    radial-gradient(circle at top right, rgba(45, 165, 108, 0.22), transparent 35%),
+    linear-gradient(145deg, #121418 0%, #1c2027 50%, #151920 100%);
+}
+
+body.tema-fundo-oficina-limpa {
+  background:
+    linear-gradient(rgba(12, 16, 20, 0.7), rgba(12, 16, 20, 0.7)),
+    url("/fundos/oficina-limpa.jpg");
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+body.tema-fundo-oficina-premium {
+  background:
+    linear-gradient(rgba(10, 13, 17, 0.74), rgba(10, 13, 17, 0.74)),
+    url("/fundos/oficina-premium.jpg");
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+body.tema-fundo-oficina-industrial {
+  background:
+    linear-gradient(rgba(14, 17, 20, 0.72), rgba(14, 17, 20, 0.72)),
+    url("/fundos/oficina-industrial.jpg");
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+body.tema-fundo-oficina-classica {
+  background:
+    linear-gradient(rgba(16, 14, 13, 0.76), rgba(16, 14, 13, 0.76)),
+    url("/fundos/oficina-classica.jpg");
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+body.tema-fundo-retro-noite {
+  background:
+    linear-gradient(rgba(14, 12, 10, 0.74), rgba(14, 12, 10, 0.74)),
+    url("/fundos/retro-noite.jpg");
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+body.tema-fundo-classico-sombra {
+  background:
+    linear-gradient(rgba(9, 11, 14, 0.76), rgba(9, 11, 14, 0.76)),
+    url("/fundos/classico-sombra.jpg");
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+body.tema-fundo-motor-classico {
+  background:
+    linear-gradient(rgba(14, 12, 11, 0.72), rgba(14, 12, 11, 0.72)),
+    url("/fundos/motor-classico.jpg");
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+body.tema-fundo-motor-bw {
+  background:
+    linear-gradient(rgba(12, 14, 16, 0.68), rgba(12, 14, 16, 0.68)),
+    url("/fundos/motor-bw.jpg");
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+body.tema-fundo-ferramenta-abstrata {
+  background:
+    linear-gradient(rgba(14, 12, 10, 0.72), rgba(14, 12, 10, 0.72)),
+    url("/fundos/ferramenta-abstrata.jpg");
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
 }
 
 .app {
@@ -94,12 +179,42 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  position: relative;
 }
 
 .acoes-pesquisa-inferior {
   display: flex;
   justify-content: flex-end;
   margin-top: 0.2rem;
+}
+
+.nav-vistas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.botao-vista {
+  background: #2d3643;
+  color: #eef2f6;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.botao-vista.ativa {
+  background: linear-gradient(180deg, var(--destaque), var(--destaque-escuro));
+  color: #111;
+}
+
+.botao-vista svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .botao-novo-material {
@@ -140,6 +255,109 @@ body {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.fundo-picker {
+  position: relative;
+}
+
+.botao-fundos-toggle {
+  background: #2f3946;
+}
+
+.menu-fundos {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  width: 196px;
+  max-height: min(72vh, 440px);
+  padding: 0.55rem;
+  border: 1px solid rgba(74, 84, 100, 0.72);
+  border-radius: 8px;
+  background: rgba(18, 22, 28, 0.96);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34);
+  z-index: 20;
+  overflow: auto;
+}
+
+.menu-fundos p {
+  margin: 0 0 0.45rem;
+  color: var(--texto-secundario);
+  font-size: 0.78rem;
+}
+
+.lista-fundos {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.botao-fundo-opcao {
+  min-height: 44px;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.04);
+  color: #eef2f6;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  justify-content: flex-start;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.botao-fundo-opcao.ativa {
+  border-color: rgba(45, 165, 108, 0.75);
+  background: rgba(45, 165, 108, 0.16);
+}
+
+.swatch-fundo {
+  width: 42px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  flex: 0 0 auto;
+  background-position: center;
+  background-size: cover;
+}
+
+.swatch-fundo-atual {
+  background: linear-gradient(135deg, #2da56c, #121418);
+}
+
+.swatch-fundo-oficina-limpa {
+  background-image: url("/fundos/oficina-limpa.jpg");
+}
+
+.swatch-fundo-oficina-premium {
+  background-image: url("/fundos/oficina-premium.jpg");
+}
+
+.swatch-fundo-oficina-industrial {
+  background-image: url("/fundos/oficina-industrial.jpg");
+}
+
+.swatch-fundo-oficina-classica {
+  background-image: url("/fundos/oficina-classica.jpg");
+}
+
+.swatch-fundo-retro-noite {
+  background-image: url("/fundos/retro-noite.jpg");
+}
+
+.swatch-fundo-classico-sombra {
+  background-image: url("/fundos/classico-sombra.jpg");
+}
+
+.swatch-fundo-motor-classico {
+  background-image: url("/fundos/motor-classico.jpg");
+}
+
+.swatch-fundo-motor-bw {
+  background-image: url("/fundos/motor-bw.jpg");
+}
+
+.swatch-fundo-ferramenta-abstrata {
+  background-image: url("/fundos/ferramenta-abstrata.jpg");
 }
 
 .pesquisa {
@@ -227,6 +445,23 @@ button:disabled {
   box-shadow: none;
   padding: 0;
   border-radius: 0;
+}
+
+.painel-dashboard {
+  display: grid;
+  gap: 1rem;
+}
+
+.painel-dashboard-resumo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.2rem 0 0;
+}
+
+.painel-dashboard-resumo .estado {
+  margin: 0;
 }
 
 .painel-header h2 {
@@ -717,6 +952,170 @@ th {
   background: #a73232;
 }
 
+.dashboard-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.dashboard-kpi,
+.dashboard-bloco {
+  background: linear-gradient(180deg, rgba(36, 40, 48, 0.94), rgba(25, 29, 35, 0.95));
+  border: 1px solid rgba(74, 84, 100, 0.45);
+  border-radius: 8px;
+}
+
+.dashboard-kpi {
+  padding: 0.9rem 1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.dashboard-kpi-label {
+  color: var(--texto-secundario);
+  font-size: 0.82rem;
+}
+
+.dashboard-kpi strong {
+  font-size: clamp(1.05rem, 2vw, 1.55rem);
+}
+
+.dashboard-graficos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.dashboard-bloco {
+  padding: 0.95rem;
+}
+
+.dashboard-bloco-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.85rem;
+}
+
+.dashboard-bloco-topo h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dashboard-bloco-topo span {
+  color: var(--texto-secundario);
+  font-size: 0.84rem;
+}
+
+.grafico-colunas {
+  min-height: 250px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(66px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.grafico-coluna-item {
+  display: grid;
+  gap: 0.45rem;
+  align-items: end;
+}
+
+.grafico-coluna-valor,
+.grafico-coluna-etiqueta {
+  font-size: 0.78rem;
+}
+
+.grafico-coluna-valor {
+  color: var(--texto-secundario);
+}
+
+.grafico-coluna-trilho {
+  height: 170px;
+  border-radius: 8px;
+  background: rgba(20, 23, 29, 0.9);
+  border: 1px solid rgba(74, 84, 100, 0.4);
+  padding: 0.3rem;
+  display: flex;
+  align-items: end;
+}
+
+.grafico-coluna-barra {
+  width: 100%;
+  min-height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #4fe19d, #1f7a4f);
+}
+
+.grafico-coluna-etiqueta {
+  color: var(--texto);
+  line-height: 1.2;
+}
+
+.grafico-barras {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.grafico-barra-linha {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.grafico-barra-cabecalho {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.grafico-barra-cabecalho strong {
+  font-size: 0.84rem;
+}
+
+.grafico-barra-etiqueta {
+  min-width: 0;
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.grafico-barra-trilho {
+  width: 100%;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(20, 23, 29, 0.92);
+  border: 1px solid rgba(74, 84, 100, 0.35);
+  overflow: hidden;
+}
+
+.grafico-barra-preenchimento {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f4d35e, #e76f51);
+}
+
+.dashboard-tabela-wrapper {
+  overflow-x: auto;
+}
+
+.dashboard-tabela {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dashboard-tabela th,
+.dashboard-tabela td {
+  padding: 0.7rem 0.45rem;
+  border-bottom: 1px solid rgba(74, 84, 100, 0.55);
+  text-align: left;
+  font-size: 0.88rem;
+}
+
+.dashboard-tabela th {
+  color: var(--destaque);
+}
+
 .modal-confirm-card {
   width: min(420px, 92vw);
 }
@@ -802,11 +1201,28 @@ th {
   .painel-form {
     position: static;
   }
+
+  .dashboard-kpis,
+  .dashboard-graficos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
   :root {
     --gutter-x: 0.9rem;
+  }
+
+  body.tema-fundo-oficina-limpa,
+  body.tema-fundo-oficina-premium,
+  body.tema-fundo-oficina-industrial,
+  body.tema-fundo-oficina-classica,
+  body.tema-fundo-retro-noite,
+  body.tema-fundo-classico-sombra,
+  body.tema-fundo-motor-classico,
+  body.tema-fundo-motor-bw,
+  body.tema-fundo-ferramenta-abstrata {
+    background-attachment: scroll;
   }
 
   .app {
@@ -837,6 +1253,21 @@ th {
   .acoes-pesquisa-inferior .botao-novo-material {
     width: 100%;
     justify-content: center;
+  }
+
+  .painel-dashboard-resumo {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nav-vistas {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-kpis,
+  .dashboard-graficos {
+    grid-template-columns: 1fr;
   }
 
   .acoes-linha {

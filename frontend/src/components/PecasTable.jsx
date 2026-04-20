@@ -177,6 +177,7 @@ export default function PecasTable({
   onGuardarEdicao,
   onEliminar,
   onAlterarQuantidade,
+  onRegistarVenda,
   operacaoEmCursoId,
   ordenacao,
   onOrdenar,
@@ -585,7 +586,8 @@ export default function PecasTable({
                               type="button"
                               className="botao-quantidade"
                               disabled={emCurso || bloquearLinha || peca.quantidade <= 0}
-                              onClick={() => onAlterarQuantidade(peca, peca.quantidade - 1)}
+                              onClick={() => onRegistarVenda?.(peca, 1)}
+                              title="Registar venda de 1 unidade"
                             >
                               -
                             </button>

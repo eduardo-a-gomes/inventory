@@ -123,6 +123,10 @@ export const inventarioApi = {
     return request(`/pecas${query}`);
   },
 
+  listarVendas: () => request("/vendas"),
+
+  obterDashboardVendas: () => request("/dashboard/vendas"),
+
   listarColunas: () => request("/schema/colunas"),
 
   adicionarColuna: (nome) =>
@@ -175,6 +179,12 @@ export const inventarioApi = {
   atualizarQuantidade: (id, quantidade) =>
     request(`/pecas/${id}/quantidade`, {
       method: "PATCH",
+      body: JSON.stringify({ quantidade }),
+    }),
+
+  registarVenda: (id, quantidade = 1) =>
+    request(`/pecas/${id}/venda`, {
+      method: "POST",
       body: JSON.stringify({ quantidade }),
     }),
 

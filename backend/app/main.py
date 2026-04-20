@@ -12,13 +12,17 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import FRONTEND_DIST_DIR
 from app.schemas import (
     AdicionarColunaPayload,
+    DashboardVendas,
     AtualizarQuantidadePayload,
     ColunaSchema,
     Peca,
     PecaCreate,
     PecaUpdate,
+    RegistarVendaPayload,
+    RegistoVendaResultado,
     ReordenarColunasPayload,
     RenomearColunaPayload,
+    VendaHistoricoItem,
 )
 from app.services.excel_repository import ExcelRepository
 
@@ -60,6 +64,24 @@ def listar_pecas(q: str | None = Query(default=None, description="Termo de pesqu
     """Lista pecas, com pesquisa textual opcional."""
     try:
         return repo.listar(termo=q)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@api_router.get("/vendas", response_model=list[VendaHistoricoItem])
+def listar_vendas() -> list[VendaHistoricoItem]:
+    """Lista o historico de vendas registadas."""
+    try:
+        return repo.listar_vendas()
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@api_router.get("/dashboard/vendas", response_model=DashboardVendas)
+def obter_dashboard_vendas() -> DashboardVendas:
+    """Devolve resumo, graficos e historico para o dashboard de vendas."""
+    try:
+        return repo.obter_dashboard_vendas()
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
@@ -172,6 +194,19 @@ def atualizar_quantidade(peca_id: str, payload: AtualizarQuantidadePayload) -> P
     if not peca:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Peca nao encontrada.")
     return peca
+
+
+@api_router.post("/pecas/{peca_id}/venda", response_model=RegistoVendaResultado)
+def registar_venda(peca_id: str, payload: RegistarVendaPayload) -> RegistoVendaResultado:
+    """Regista a venda de unidades e atualiza o stock atual."""
+    try:
+        resultado = repo.registar_venda(peca_id, payload.quantidade)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if not resultado:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Peca nao encontrada.")
+    return resultado
 
 
 @api_router.delete("/pecas/{peca_id}", status_code=status.HTTP_204_NO_CONTENT)
