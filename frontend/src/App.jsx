@@ -43,16 +43,6 @@ function IconeMais() {
   );
 }
 
-function IconeDashboard() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 19V10" />
-      <path d="M12 19V5" />
-      <path d="M20 19v-8" />
-    </svg>
-  );
-}
-
 function IconeFundos() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -577,7 +567,7 @@ export default function App() {
               .map((coluna) => {
                 const valor = obterValorColuna(peca, coluna.chave);
                 const valorFormatado =
-                  coluna.chave === "preco" ? `${Number(valor ?? 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : valor;
+                  coluna.chave === "preco" ? `${Number(valor ?? 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR` : valor;
                 return `<td>${escapeHtml(valorFormatado ?? "-")}</td>`;
               })
               .join("");
@@ -654,72 +644,68 @@ export default function App() {
         <div className="cabecalho-topo">
           <div className="brand">
             <img src="/AutoCardoso.png" alt="Logo da oficina AutoCardoso" />
-            <div>
-              <h1>Inventário</h1>
-            </div>
           </div>
-
-          <div className="acoes-topo">
-            <div className="fundo-picker" ref={seletorFundosRef}>
+          <div className="barra-superior">
+            <div className="nav-vistas">
               <button
                 type="button"
-                className="botao-iconico botao-fundos-toggle"
-                title="Escolher fundo"
-                onClick={() => setSeletorFundosAberto((anterior) => !anterior)}
+                className={`botao-vista${vistaAtiva === "inventario" ? " ativa" : ""}`}
+                onClick={() => setVistaAtiva("inventario")}
               >
-                <IconeFundos />
+                Inventario
               </button>
-
-              {seletorFundosAberto ? (
-                <div className="menu-fundos">
-                  <p>Fundos</p>
-                  <div className="lista-fundos">
-                    {TEMAS_FUNDO.map((tema) => (
-                      <button
-                        key={tema.id}
-                        type="button"
-                        className={`botao-fundo-opcao${temaFundo === tema.id ? " ativa" : ""}`}
-                        onClick={() => {
-                          setTemaFundo(tema.id);
-                          setSeletorFundosAberto(false);
-                        }}
-                      >
-                        <span className={`swatch-fundo swatch-fundo-${tema.id}`} aria-hidden="true" />
-                        <span>{tema.nome}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
+              <button
+                type="button"
+                className={`botao-vista${vistaAtiva === "dashboard" ? " ativa" : ""}`}
+                onClick={() => setVistaAtiva("dashboard")}
+              >
+                Dashboard
+              </button>
             </div>
 
-            <button type="button" className="botao-iconico" onClick={handleImprimir} title="Imprimir tabela da base de dados">
-              <IconeImprimir />
-            </button>
-            <button type="button" className="botao-iconico" onClick={handleExportarExcel} title="Exportar base de dados para Excel">
-              <IconeExportar />
-            </button>
+            <div className="acoes-topo">
+              <div className="fundo-picker" ref={seletorFundosRef}>
+                <button
+                  type="button"
+                  className="botao-iconico botao-fundos-toggle"
+                  title="Escolher fundo"
+                  onClick={() => setSeletorFundosAberto((anterior) => !anterior)}
+                >
+                  <IconeFundos />
+                </button>
+
+                {seletorFundosAberto ? (
+                  <div className="menu-fundos">
+                    <p>Fundos</p>
+                    <div className="lista-fundos">
+                      {TEMAS_FUNDO.map((tema) => (
+                        <button
+                          key={tema.id}
+                          type="button"
+                          className={`botao-fundo-opcao${temaFundo === tema.id ? " ativa" : ""}`}
+                          onClick={() => {
+                            setTemaFundo(tema.id);
+                            setSeletorFundosAberto(false);
+                          }}
+                        >
+                          <span className={`swatch-fundo swatch-fundo-${tema.id}`} aria-hidden="true" />
+                          <span>{tema.nome}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <button type="button" className="botao-iconico" onClick={handleImprimir} title="Imprimir tabela da base de dados">
+                <IconeImprimir />
+              </button>
+              <button type="button" className="botao-iconico" onClick={handleExportarExcel} title="Exportar base de dados para Excel">
+                <IconeExportar />
+              </button>
+            </div>
           </div>
         </div>
-
-        <div className="nav-vistas">
-          <button
-            type="button"
-            className={`botao-vista${vistaAtiva === "inventario" ? " ativa" : ""}`}
-            onClick={() => setVistaAtiva("inventario")}
-          >
-            Inventario
-          </button>
-          <button
-            type="button"
-            className={`botao-vista${vistaAtiva === "dashboard" ? " ativa" : ""}`}
-            onClick={() => setVistaAtiva("dashboard")}
-          >
-            <IconeDashboard />
-            <span>Dashboard vendas</span>
-          </button>
-        </div>
-
         {vistaAtiva === "inventario" ? (
           <>
             <form className="pesquisa" onSubmit={handlePesquisar}>

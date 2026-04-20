@@ -84,29 +84,37 @@ body::before {
 
 .cabecalho-topo {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-start;
   gap: 1rem;
 }
 
 .brand {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 0.9rem;
 }
 
 .brand img {
-  width: 120px;
-  height: 120px;
+  width: clamp(70px, 8vw, 92px);
+  height: clamp(70px, 8vw, 92px);
   object-fit: contain;
-  border-radius: 12px;
+  border-radius: 0;
   background: none;
   border: none;
 }
 
-.brand h1 {
-  margin: 0.1rem 0 0;
-  font-size: clamp(1.1rem, 2.5vw, 1.7rem);
+.barra-superior {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.1rem 0;
+  background: transparent;
 }
 
 .subtitulo {
@@ -120,8 +128,11 @@ body::before {
 .acoes-topo {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.45rem;
   position: relative;
+  margin-left: auto;
 }
 
 .acoes-pesquisa-inferior {
@@ -131,22 +142,48 @@ body::before {
 }
 
 .nav-vistas {
-  display: flex;
+  display: inline-flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 0.65rem;
+  gap: 0.85rem;
+  min-width: 0;
 }
 
 .botao-vista {
-  background: #2d3643;
-  color: #eef2f6;
+  position: relative;
+  min-height: 34px;
+  padding: 0.25rem 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--texto-secundario);
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  font-size: 0.98rem;
+  font-weight: 600;
+  transition: color 0.2s ease, opacity 0.2s ease;
 }
 
 .botao-vista.ativa {
-  background: linear-gradient(180deg, var(--destaque), var(--destaque-escuro));
-  color: #111;
+  background: transparent;
+  color: #f5f7fa;
+}
+
+.botao-vista::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.38rem;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.botao-vista.ativa::after {
+  background: linear-gradient(90deg, rgba(45, 165, 108, 0.2), var(--destaque), rgba(45, 165, 108, 0.2));
+  box-shadow: 0 0 12px rgba(45, 165, 108, 0.55);
 }
 
 .botao-vista svg {
@@ -182,11 +219,12 @@ body::before {
   min-width: 32px;
   padding: 0;
   border-radius: 8px;
-  background: #334457;
+  background: transparent;
   color: #e6ecf2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
 }
 
 .botao-iconico svg {
@@ -204,7 +242,24 @@ body::before {
 }
 
 .botao-fundos-toggle {
-  background: #2f3946;
+  background: transparent;
+}
+
+.botao-vista:hover,
+.botao-vista:focus-visible {
+  transform: none;
+  filter: none;
+  color: #ffffff;
+}
+
+.botao-iconico:hover,
+.botao-iconico:focus-visible,
+.botao-fundos-toggle:hover,
+.botao-fundos-toggle:focus-visible {
+  transform: none;
+  filter: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
 
 .menu-fundos {
@@ -1160,6 +1215,12 @@ th {
     align-items: flex-start;
   }
 
+  .barra-superior {
+    width: 100%;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
   .acoes-pesquisa-inferior {
     justify-content: stretch;
   }
@@ -1175,8 +1236,8 @@ th {
   }
 
   .nav-vistas {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: wrap;
   }
 
   .dashboard-kpis,
