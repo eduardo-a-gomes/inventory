@@ -1,5 +1,5 @@
-/**
- * Modal de confirmacao reutilizavel.
+﻿/**
+ * Modal de confirmação reutilizável.
  */
 export default function ConfirmModal({
   aberto,
@@ -34,4 +34,5 @@ export default function ConfirmModal({
     </div>
   );
 }
+
 

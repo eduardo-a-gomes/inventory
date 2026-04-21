@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
- * Tabela principal de pecas do inventario.
+ * Tabela principal de peças do inventário.
  */
 const COLUNAS_PADRAO = [
-  { chave: "referencia", nome: "Referencia" },
+  { chave: "referencia", nome: "Referência" },
   { chave: "categoria", nome: "Categoria" },
   { chave: "marca", nome: "Marca" },
-  { chave: "designacao", nome: "Designacao" },
+  { chave: "designacao", nome: "Designação" },
   { chave: "local", nome: "Local" },
   { chave: "preco", nome: "Preço" },
   { chave: "quantidade", nome: "Quantidade" },
@@ -66,9 +66,11 @@ function IconeEliminar() {
 function IconeVenda() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 7h16" />
-      <path d="M7 4h10l3 5-8 11-8-11 3-5z" />
-      <path d="M12 10v4" />
+      <path d="M9 4h6l-1.5 2h-3z" />
+      <path d="M8.6 8h6.8" />
+      <path d="M12 8c4.2 0 6.8 2.7 6.2 6.8-.5 3.4-3.2 5.2-6.2 5.2s-5.7-1.8-6.2-5.2C5.2 10.7 7.8 8 12 8z" />
+      <path d="M12 11.2v5.6" />
+      <path d="M14 12.7c0-.9-.8-1.5-2-1.5s-2 .6-2 1.5.7 1.3 2 1.6 2 .8 2 1.7-.8 1.6-2 1.6-2-.7-2-1.6" />
     </svg>
   );
 }
@@ -377,7 +379,7 @@ export default function PecasTable({
   if (loading) {
     return (
       <section className="painel painel-tabela">
-        <p className="estado">A carregar pecas...</p>
+        <p className="estado">A carregar peças...</p>
       </section>
     );
   }
@@ -385,7 +387,7 @@ export default function PecasTable({
   if (!pecas.length && !criandoNovo) {
     return (
       <section className="painel painel-tabela">
-        <p className="estado">Nenhuma peca encontrada para os filtros atuais.</p>
+        <p className="estado">Nenhuma peça encontrada para os filtros atuais.</p>
       </section>
     );
   }
@@ -420,7 +422,7 @@ export default function PecasTable({
                   </th>
                 );
               })}
-              <th className="coluna-acoes">Acoes</th>
+              <th className="coluna-acoes">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -593,26 +595,9 @@ export default function PecasTable({
                     if (coluna.chave === CHAVE_QUANTIDADE) {
                       return (
                         <td key={`${peca.id}-${coluna.chave}`}>
-                          <div className="quantidade-box">
-                            <button
-                              type="button"
-                              className="botao-quantidade"
-                              disabled={emCurso || bloquearLinha || peca.quantidade <= 0}
-                              onClick={() => onAlterarQuantidade(peca, peca.quantidade - 1)}
-                              title="Reduzir stock"
-                            >
-                              -
-                            </button>
-                            <span>{peca.quantidade}</span>
-                            <button
-                              type="button"
-                              className="botao-quantidade"
-                              disabled={emCurso || bloquearLinha}
-                              onClick={() => onAlterarQuantidade(peca, peca.quantidade + 1)}
-                            >
-                              +
-                            </button>
-                          </div>
+                          <span className="quantidade-texto" title="Clique em editar para alterar a quantidade">
+                            {peca.quantidade}
+                          </span>
                         </td>
                       );
                     }
@@ -630,7 +615,7 @@ export default function PecasTable({
                             className="botao-acao botao-guardar"
                             onClick={() => guardarEdicao(peca)}
                             disabled={emCurso}
-                            title="Guardar alteracoes"
+                            title="Guardar alterações"
                           >
                             <IconeGuardar />
                           </button>
@@ -639,7 +624,7 @@ export default function PecasTable({
                             className="botao-acao botao-cancelar"
                             onClick={cancelarEdicao}
                             disabled={emCurso}
-                            title="Cancelar edicao"
+                            title="Cancelar edição"
                           >
                             <IconeCancelar />
                           </button>
@@ -671,7 +656,7 @@ export default function PecasTable({
                             className="botao-acao botao-eliminar"
                             onClick={() => onEliminar(peca)}
                             disabled={emCurso || bloquearLinha}
-                            title="Eliminar peca"
+                            title="Eliminar peça"
                           >
                             <IconeEliminar />
                           </button>
@@ -688,3 +673,4 @@ export default function PecasTable({
     </section>
   );
 }
+

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 
 function normalizarInputPreco(valor) {
   const texto = String(valor ?? "").replace(",", ".");
@@ -19,6 +19,7 @@ function precoParaNumero(valor) {
 export default function VendaModal({ aberto, peca, loading = false, onConfirm, onCancel }) {
   const [quantidade, setQuantidade] = useState(1);
   const [precoUnitario, setPrecoUnitario] = useState("0.00");
+  const quantidadeMaxima = Math.max(1, Number(peca?.quantidade ?? 1));
 
   useEffect(() => {
     if (!aberto || !peca) {
@@ -43,24 +44,38 @@ export default function VendaModal({ aberto, peca, loading = false, onConfirm, o
         </div>
 
         <p className="modal-ajuda">
-          {peca.designacao || "Material sem designacao"}{peca.referencia ? ` - ${peca.referencia}` : ""}
+          {peca.designacao || "Material sem designação"}{peca.referencia ? ` - ${peca.referencia}` : ""}
         </p>
 
         <div className="form-grid">
           <label>
             Quantidade vendida
-            <input
-              type="number"
-              min="1"
-              max={Math.max(1, Number(peca.quantidade ?? 1))}
-              value={quantidade}
-              onChange={(event) => setQuantidade(Math.max(1, Math.min(Number(peca.quantidade ?? 1), Number(event.target.value || 1))))}
-              disabled={loading}
-            />
+            <div className="quantidade-box quantidade-box-venda">
+              <button
+                type="button"
+                className="botao-quantidade"
+                disabled={loading || quantidade <= 1}
+                onClick={() => setQuantidade((valorAtual) => Math.max(1, valorAtual - 1))}
+                title="Diminuir quantidade"
+              >
+                -
+              </button>
+              <span>{quantidade}</span>
+              <button
+                type="button"
+                className="botao-quantidade"
+                disabled={loading || quantidade >= quantidadeMaxima}
+                onClick={() => setQuantidade((valorAtual) => Math.min(quantidadeMaxima, valorAtual + 1))}
+                title="Aumentar quantidade"
+              >
+                +
+              </button>
+            </div>
+            <span className="quantidade-venda-limite">Máximo disponível: {quantidadeMaxima}</span>
           </label>
 
           <label>
-            Preco unitario da venda
+            Preço unitário da venda
             <div className="input-preco-wrapper">
               <input
                 className="input-preco"
@@ -99,3 +114,4 @@ export default function VendaModal({ aberto, peca, loading = false, onConfirm, o
     </div>
   );
 }
+

@@ -85,6 +85,63 @@ class ExcelRepository:
             ).fetchall()
             return [self._row_to_venda(row) for row in rows]
 
+    def atualizar_venda_historico(
+        self,
+        venda_id: str,
+        quantidade_vendida: int,
+        preco_unitario: float,
+    ) -> Optional[VendaHistoricoItem]:
+        """Edita uma venda antiga e ajusta o stock atual de acordo com a diferenca de quantidade."""
+        quantidade_vendida = max(1, int(quantidade_vendida))
+        preco_unitario = self._safe_price(preco_unitario)
+        if preco_unitario < 0:
+            raise ValueError("Indica um preco unitario valido.")
+
+        with self._lock, self._connect() as conn:
+            venda_row = self._obter_venda_por_id_conn(conn, venda_id)
+            if not venda_row:
+                return None
+
+            venda = self._row_to_venda(venda_row)
+            delta_quantidade = quantidade_vendida - max(1, int(venda.quantidade_vendida))
+            if delta_quantidade > 0:
+                self._retirar_do_stock(conn, venda, delta_quantidade)
+            elif delta_quantidade < 0:
+                self._repor_ao_stock(conn, venda, abs(delta_quantidade))
+
+            conn.execute(
+                """
+                UPDATE vendas
+                SET quantidade_vendida = ?, preco_unitario = ?
+                WHERE id = ?
+                """,
+                (quantidade_vendida, preco_unitario, venda_id),
+            )
+            conn.commit()
+
+            venda_row_atualizada = self._obter_venda_por_id_conn(conn, venda_id)
+            return self._row_to_venda(venda_row_atualizada) if venda_row_atualizada else None
+
+    def eliminar_venda_historico(self, venda_id: str) -> bool:
+        """Remove uma venda do historico sem mexer no stock."""
+        with self._lock, self._connect() as conn:
+            deleted = conn.execute("DELETE FROM vendas WHERE id = ?", (venda_id,))
+            conn.commit()
+            return deleted.rowcount > 0
+
+    def repor_venda_no_inventario(self, venda_id: str) -> Optional[Peca]:
+        """Repõe no stock a quantidade vendida e remove o respetivo registo do historico."""
+        with self._lock, self._connect() as conn:
+            venda_row = self._obter_venda_por_id_conn(conn, venda_id)
+            if not venda_row:
+                return None
+
+            venda = self._row_to_venda(venda_row)
+            peca = self._repor_ao_stock(conn, venda, max(1, int(venda.quantidade_vendida)))
+            conn.execute("DELETE FROM vendas WHERE id = ?", (venda_id,))
+            conn.commit()
+            return peca
+
     def obter_dashboard_vendas(self) -> DashboardVendas:
         """Constroi o dashboard com historico, faturacao e valor atual em stock."""
         historico = self.listar_vendas()
@@ -94,6 +151,7 @@ class ExcelRepository:
         valor_em_stock = round(sum(self._safe_price(peca.preco) * max(0, int(peca.quantidade)) for peca in pecas), 2)
         total_vendas = len(historico)
         unidades_vendidas = sum(max(0, int(venda.quantidade_vendida)) for venda in historico)
+        unidades_em_stock = sum(max(0, int(peca.quantidade)) for peca in pecas)
 
         faturacao_por_mes_map: Dict[str, float] = {}
         for venda in historico:
@@ -146,6 +204,7 @@ class ExcelRepository:
                 valor_em_stock=valor_em_stock,
                 total_vendas=total_vendas,
                 unidades_vendidas=unidades_vendidas,
+                unidades_em_stock=unidades_em_stock,
             ),
             faturacao_por_mes=faturacao_por_mes,
             valor_stock_por_categoria=valor_stock_por_categoria,
@@ -912,6 +971,130 @@ class ExcelRepository:
             total_venda=total_venda,
             vendida_em=vendida_em,
             extras=self._parse_extras(row["extras"]),
+        )
+
+    def _obter_venda_por_id_conn(self, conn: sqlite3.Connection, venda_id: str) -> Optional[sqlite3.Row]:
+        """Le um registo de venda pelo ID usando uma conexao ja aberta."""
+        return conn.execute(
+            """
+            SELECT id, peca_id, referencia, categoria, marca, designacao, local,
+                   preco_unitario, quantidade_vendida, vendida_em, extras
+            FROM vendas
+            WHERE id = ?
+            """,
+            (venda_id,),
+        ).fetchone()
+
+    def _obter_peca_por_id_conn(self, conn: sqlite3.Connection, peca_id: str) -> Optional[Peca]:
+        """Le uma peca pelo ID usando uma conexao ja aberta."""
+        row = conn.execute(
+            """
+            SELECT id, referencia, categoria, marca, designacao, preco, quantidade, local, extras
+            FROM pecas
+            WHERE id = ?
+            """,
+            (peca_id,),
+        ).fetchone()
+        return self._row_to_peca(row) if row else None
+
+    def _encontrar_peca_por_snapshot_conn(self, conn: sqlite3.Connection, venda: VendaHistoricoItem) -> Optional[Peca]:
+        """Procura uma peca ativa equivalente ao snapshot da venda."""
+        row = conn.execute(
+            """
+            SELECT id, referencia, categoria, marca, designacao, preco, quantidade, local, extras
+            FROM pecas
+            WHERE referencia = ? AND categoria = ? AND marca = ? AND designacao = ?
+            ORDER BY id ASC
+            LIMIT 1
+            """,
+            (
+                venda.referencia,
+                venda.categoria,
+                venda.marca,
+                venda.designacao,
+            ),
+        ).fetchone()
+        return self._row_to_peca(row) if row else None
+
+    def _retirar_do_stock(self, conn: sqlite3.Connection, venda: VendaHistoricoItem, quantidade: int) -> None:
+        """Retira unidades do stock atual para acomodar aumento de quantidade numa venda antiga."""
+        if quantidade <= 0:
+            return
+
+        peca = None
+        if venda.peca_id:
+            peca = self._obter_peca_por_id_conn(conn, venda.peca_id)
+        if not peca:
+            peca = self._encontrar_peca_por_snapshot_conn(conn, venda)
+        if not peca:
+            raise ValueError("Nao existe stock disponivel para aumentar esta venda.")
+
+        stock_atual = max(0, int(peca.quantidade))
+        if quantidade > stock_atual:
+            raise ValueError("A quantidade excede o stock atual disponivel para este material.")
+
+        nova_quantidade = stock_atual - quantidade
+        if nova_quantidade <= 0:
+            conn.execute("DELETE FROM pecas WHERE id = ?", (peca.id,))
+            return
+
+        conn.execute("UPDATE pecas SET quantidade = ? WHERE id = ?", (nova_quantidade, peca.id))
+
+    def _repor_ao_stock(self, conn: sqlite3.Connection, venda: VendaHistoricoItem, quantidade: int) -> Peca:
+        """Repõe unidades no stock com base no snapshot guardado na venda."""
+        quantidade_repor = max(1, int(quantidade))
+
+        peca = None
+        if venda.peca_id:
+            peca = self._obter_peca_por_id_conn(conn, venda.peca_id)
+        if not peca:
+            peca = self._encontrar_peca_por_snapshot_conn(conn, venda)
+
+        if peca:
+            nova_quantidade = max(0, int(peca.quantidade)) + quantidade_repor
+            conn.execute("UPDATE pecas SET quantidade = ? WHERE id = ?", (nova_quantidade, peca.id))
+            return Peca(
+                id=peca.id,
+                referencia=peca.referencia,
+                categoria=peca.categoria,
+                marca=peca.marca,
+                designacao=peca.designacao,
+                preco=peca.preco,
+                quantidade=nova_quantidade,
+                local=peca.local,
+                extras=peca.extras,
+            )
+
+        novo_id = str(venda.peca_id or uuid4())
+        extras = venda.extras or {}
+        preco_snapshot = self._safe_price(venda.preco_unitario)
+        conn.execute(
+            """
+            INSERT INTO pecas (id, referencia, categoria, marca, designacao, preco, quantidade, local, extras)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                novo_id,
+                venda.referencia,
+                venda.categoria,
+                venda.marca,
+                venda.designacao,
+                preco_snapshot,
+                quantidade_repor,
+                venda.local,
+                json.dumps(extras, ensure_ascii=False),
+            ),
+        )
+        return Peca(
+            id=novo_id,
+            referencia=venda.referencia,
+            categoria=venda.categoria,
+            marca=venda.marca,
+            designacao=venda.designacao,
+            preco=preco_snapshot,
+            quantidade=quantidade_repor,
+            local=venda.local,
+            extras=extras,
         )
 
     def _criar_registo_venda(

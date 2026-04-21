@@ -1,13 +1,13 @@
-/**
- * Cliente HTTP simples para comunicacao com o backend FastAPI.
+﻿/**
+ * Cliente HTTP simples para comunicação com o backend FastAPI.
  */
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
 const NOMES_CAMPOS_ERRO = {
-  referencia: "Referencia",
+  referencia: "Referência",
   categoria: "Categoria",
   marca: "Marca",
-  designacao: "Designacao",
+  designacao: "Designação",
   preco: "Preço",
   quantidade: "Quantidade",
   local: "Local",
@@ -39,7 +39,7 @@ function traduzirMensagemErro(item) {
 
   switch (item.type) {
     case "missing":
-      return "Campo obrigatorio.";
+      return "Campo obrigatório.";
     case "string_too_long":
       return item.ctx?.max_length
         ? `Texto demasiado longo. Limite: ${item.ctx.max_length} caracteres.`
@@ -50,9 +50,9 @@ function traduzirMensagemErro(item) {
       return item.ctx?.ge !== undefined ? `Tem de ser maior ou igual a ${item.ctx.ge}.` : "Valor demasiado baixo.";
     case "int_parsing":
     case "int_type":
-      return "Tem de ser um numero inteiro.";
+      return "Tem de ser um número inteiro.";
     case "value_error":
-      return limparMensagemValidacao(item.msg || item.message || "Dados invalidos.");
+      return limparMensagemValidacao(item.msg || item.message || "Dados inválidos.");
     default:
       return limparMensagemValidacao(item.msg || item.message || JSON.stringify(item));
   }
@@ -80,7 +80,7 @@ function formatarDetalheErro(detail) {
       })
       .filter(Boolean);
 
-    return mensagens.join(" ") || "Dados invalidos. Confirma os campos preenchidos.";
+    return mensagens.join(" ") || "Dados inválidos. Confirma os campos preenchidos.";
   }
 
   if (typeof detail === "object") {
@@ -101,7 +101,7 @@ async function request(path, options = {}) {
       ...options,
     });
   } catch (error) {
-    throw new Error("Nao foi possivel ligar ao servidor da aplicacao. Fecha e volta a abrir o inventario.");
+    throw new Error("Não foi possível ligar ao servidor da aplicação. Fecha e volta a abrir o inventário.");
   }
 
   if (!response.ok) {
@@ -124,6 +124,22 @@ export const inventarioApi = {
   },
 
   listarVendas: () => request("/vendas"),
+
+  atualizarVendaHistorico: (id, payload) =>
+    request(`/vendas/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  eliminarVendaHistorico: (id) =>
+    request(`/vendas/${id}`, {
+      method: "DELETE",
+    }),
+
+  reporVendaNoInventario: (id) =>
+    request(`/vendas/${id}/repor`, {
+      method: "POST",
+    }),
 
   obterDashboardVendas: () => request("/dashboard/vendas"),
 
@@ -155,7 +171,7 @@ export const inventarioApi = {
   exportarExcel: async () => {
     const response = await fetch(`${API_BASE_URL}/export/excel`, { method: "GET" });
     if (!response.ok) {
-      throw new Error("Nao foi possivel exportar para Excel.");
+      throw new Error("Não foi possível exportar para Excel.");
     }
     const blob = await response.blob();
     return {
@@ -193,3 +209,4 @@ export const inventarioApi = {
       method: "DELETE",
     }),
 };
+

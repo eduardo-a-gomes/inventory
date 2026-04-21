@@ -1,5 +1,5 @@
-/**
- * Notificacoes flutuantes sem impactar o layout principal.
+﻿/**
+ * Notificações flutuantes sem impactar o layout principal.
  */
 export default function ToastStack({ itens, onFechar }) {
   if (!itens.length) {
@@ -11,7 +11,7 @@ export default function ToastStack({ itens, onFechar }) {
       {itens.map((toast) => (
         <div key={toast.id} className={`toast toast-${toast.tipo}`}>
           <span>{toast.mensagem}</span>
-          <button type="button" className="toast-fechar" onClick={() => onFechar(toast.id)} aria-label="Fechar notificacao">
+          <button type="button" className="toast-fechar" onClick={() => onFechar(toast.id)} aria-label="Fechar notificação">
             x
           </button>
         </div>
@@ -19,4 +19,5 @@ export default function ToastStack({ itens, onFechar }) {
     </div>
   );
 }
+
 

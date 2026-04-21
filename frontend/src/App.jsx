@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { inventarioApi } from "./api";
 import ConfirmModal from "./components/ConfirmModal";
 import DashboardVendas from "./components/DashboardVendas";
@@ -53,6 +53,15 @@ function IconeFundos() {
   );
 }
 
+function IconeLupa() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "16px", height: "16px" }}>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
 function obterValorColuna(peca, campo) {
   if (Object.prototype.hasOwnProperty.call(peca, campo)) {
     return peca[campo];
@@ -92,7 +101,7 @@ function normalizarReferencia(valor) {
 }
 
 /**
- * Pagina principal da aplicacao de inventario.
+ * Página principal da aplicação de inventário.
  */
 export default function App() {
   const [pecas, setPecas] = useState([]);
@@ -103,6 +112,7 @@ export default function App() {
   const [loadingSchema, setLoadingSchema] = useState(false);
   const [loadingConfirmacao, setLoadingConfirmacao] = useState(false);
   const [operacaoEmCursoId, setOperacaoEmCursoId] = useState(null);
+  const [operacaoVendaHistoricoId, setOperacaoVendaHistoricoId] = useState(null);
   const [pesquisa, setPesquisa] = useState("");
   const [filtroAtual, setFiltroAtual] = useState("");
   const [ordenacao, setOrdenacao] = useState({ campo: null, direcao: "asc" });
@@ -244,6 +254,13 @@ export default function App() {
     }
   }, [colunas, ordenacao.campo]);
 
+  useEffect(() => {
+    if (vistaAtiva !== "dashboard") {
+      return;
+    }
+    carregarDashboard();
+  }, [vistaAtiva]);
+
   const abrirConfirmacao = ({
     titulo,
     mensagem,
@@ -308,8 +325,8 @@ export default function App() {
       if (referenciaDuplicada) {
         const confirmarCriacao = await new Promise((resolve) => {
           abrirConfirmacao({
-            titulo: "Referencia duplicada",
-            mensagem: `Ja existe um registo com a referencia "${payload.referencia}". Quer mesmo submeter?`,
+            titulo: "Referência duplicada",
+            mensagem: `Já existe um registo com a referência "${payload.referencia}". Quer mesmo submeter?`,
             textoConfirmar: "Submeter",
             textoCancelar: "Cancelar",
             onConfirm: () => resolve(true),
@@ -326,7 +343,7 @@ export default function App() {
     setLoadingForm(true);
     try {
       await inventarioApi.criarPeca(payload);
-      mostrarToast("sucesso", "Nova peca adicionada ao inventario.");
+      mostrarToast("sucesso", "Nova peça adicionada ao inventário.");
       await sincronizarInventarioEDashboard(filtroAtual);
       return true;
     } catch (error) {
@@ -394,7 +411,7 @@ export default function App() {
     if (quantidadeAnterior > 0 && novaQuantidade === 0) {
       abrirConfirmacao({
         titulo: "Eliminar registo",
-        mensagem: "Ao reduzir para zero, este material sera removido do inventario. Pretende continuar?",
+        mensagem: "Ao reduzir para zero, este material será removido do inventário. Pretende continuar?",
         textoConfirmar: "Eliminar",
         perigo: true,
         onConfirm: () => eliminarPeca(peca),
@@ -440,7 +457,7 @@ export default function App() {
       await inventarioApi.registarVenda(peca.id, payload);
       const mensagemSucesso =
         quantidadeFinal === 0
-          ? "Venda registada. Material esgotado e removido do inventario."
+          ? "Venda registada. Material esgotado e removido do inventário."
           : "Venda registada com sucesso.";
       mostrarToast("sucesso", mensagemSucesso);
       setVendaModal(null);
@@ -450,6 +467,67 @@ export default function App() {
     } finally {
       setOperacaoEmCursoId(null);
     }
+  };
+
+  const handleAtualizarVendaHistorico = async (venda, payload) => {
+    if (!venda?.id) {
+      return false;
+    }
+
+    setOperacaoVendaHistoricoId(venda.id);
+    try {
+      await inventarioApi.atualizarVendaHistorico(venda.id, payload);
+      mostrarToast("sucesso", "Registo de venda atualizado.");
+      await sincronizarInventarioEDashboard(filtroAtual);
+      return true;
+    } catch (error) {
+      mostrarToast("erro", error.message);
+      return false;
+    } finally {
+      setOperacaoVendaHistoricoId(null);
+    }
+  };
+
+  const handleEliminarVendaHistorico = (venda) => {
+    abrirConfirmacao({
+      titulo: "Eliminar registo de venda",
+      mensagem: `Pretende eliminar o registo de venda de "${venda?.designacao || "material"}"?`,
+      textoConfirmar: "Eliminar",
+      perigo: true,
+      onConfirm: async () => {
+        setOperacaoVendaHistoricoId(venda.id);
+        try {
+          await inventarioApi.eliminarVendaHistorico(venda.id);
+          mostrarToast("sucesso", "Registo de venda eliminado.");
+          await sincronizarInventarioEDashboard(filtroAtual);
+        } catch (error) {
+          mostrarToast("erro", error.message);
+        } finally {
+          setOperacaoVendaHistoricoId(null);
+        }
+      },
+    });
+  };
+
+  const handleReporVendaHistorico = (venda) => {
+    abrirConfirmacao({
+      titulo: "Repor venda no inventário",
+      mensagem: `Pretende repor ${venda?.quantidade_vendida || 0} unidade(s) de "${venda?.designacao || "material"}" no inventário?`,
+      textoConfirmar: "Repor",
+      perigo: false,
+      onConfirm: async () => {
+        setOperacaoVendaHistoricoId(venda.id);
+        try {
+          await inventarioApi.reporVendaNoInventario(venda.id);
+          mostrarToast("sucesso", "Venda reposta no inventário.");
+          await sincronizarInventarioEDashboard(filtroAtual);
+        } catch (error) {
+          mostrarToast("erro", error.message);
+        } finally {
+          setOperacaoVendaHistoricoId(null);
+        }
+      },
+    });
   };
 
   const handlePesquisar = async (event) => {
@@ -505,7 +583,7 @@ export default function App() {
 
   const handleRemoverColuna = (coluna) => {
     if (coluna?.chave === "quantidade" || coluna?.chave === "preco") {
-      mostrarToast("aviso", "Essa coluna e fixa e nao pode ser eliminada.");
+      mostrarToast("aviso", "Essa coluna é fixa e não pode ser eliminada.");
       return;
     }
 
@@ -580,7 +658,7 @@ export default function App() {
           <html lang="pt-PT">
             <head>
               <meta charset="UTF-8" />
-              <title>Impressao Inventario</title>
+              <title>Impressão Inventário</title>
               <style>
                 body { font-family: Arial, sans-serif; padding: 20px; color: #111; }
                 h1 { margin: 0 0 10px; font-size: 22px; }
@@ -591,7 +669,7 @@ export default function App() {
               </style>
             </head>
             <body>
-              <h1>Inventario Oficina AutoCardoso</h1>
+              <h1>Inventário Oficina AutoCardoso</h1>
               <p>Data: ${new Date().toLocaleString("pt-PT")}</p>
               <table>
                 <thead><tr>${headers}</tr></thead>
@@ -614,7 +692,7 @@ export default function App() {
           janela.print();
         }, 250);
       } catch (error) {
-        mostrarToast("erro", error.message || "Erro ao preparar impressao.");
+        mostrarToast("erro", error.message || "Erro ao preparar impressão.");
       }
     })();
   };
@@ -632,7 +710,7 @@ export default function App() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      mostrarToast("sucesso", "Exportacao em Excel concluida.");
+      mostrarToast("sucesso", "Exportação em Excel concluída.");
     } catch (error) {
       mostrarToast("erro", error.message);
     }
@@ -642,22 +720,27 @@ export default function App() {
     <main className="app">
       <header className="cabecalho">
         <div className="cabecalho-topo">
-          <div className="brand">
+          <div className="brand" style={{ transform: "scale(1.80)", transformOrigin: "left center" }}>
             <img src="/AutoCardoso.png" alt="Logo da oficina AutoCardoso" />
           </div>
           <div className="barra-superior">
-            <div className="nav-vistas">
+            <div className="nav-vistas" style={{ gap: "20px", marginLeft: "80px" }}>
               <button
                 type="button"
                 className={`botao-vista${vistaAtiva === "inventario" ? " ativa" : ""}`}
                 onClick={() => setVistaAtiva("inventario")}
+                style={{ fontSize: "18px", padding: "10px 20px" }}
               >
-                Inventario
+                Inventário
               </button>
               <button
                 type="button"
                 className={`botao-vista${vistaAtiva === "dashboard" ? " ativa" : ""}`}
-                onClick={() => setVistaAtiva("dashboard")}
+                onClick={() => {
+                  setVistaAtiva("dashboard");
+                  carregarDashboard();
+                }}
+                style={{ fontSize: "18px", padding: "10px 20px" }}
               >
                 Dashboard
               </button>
@@ -708,41 +791,50 @@ export default function App() {
         </div>
         {vistaAtiva === "inventario" ? (
           <>
-            <form className="pesquisa" onSubmit={handlePesquisar}>
-              <input
-                type="search"
-                placeholder="Pesquisar por referencia, marca, designacao..."
-                value={pesquisa}
-                onChange={(event) => setPesquisa(event.target.value)}
-              />
-              <button type="submit">Pesquisar</button>
-              <button type="button" className="botao-secundario" onClick={() => setModalSchemaAberto(true)}>
+            <form className="pesquisa" onSubmit={handlePesquisar} style={{ display: "flex", width: "100%", gap: "12px" }}>
+              <div style={{ position: "relative", flex: 1, display: "flex", alignItems: "center" }}>
+                <input
+                  type="search"
+                  placeholder="Pesquisar por referência, marca, designação..."
+                  value={pesquisa}
+                  onChange={(event) => setPesquisa(event.target.value)}
+                  style={{ width: "100%", paddingRight: "145px" }}
+                />
+                <button 
+                  type="submit" 
+                  style={{ 
+                    position: "absolute", 
+                    right: "0px", 
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    height: "calc(100% - 12px)", 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "6px",
+                    padding: "0 16px",
+                    margin: 0,
+                    color: "#fff"
+                  }}
+                >
+                  <IconeLupa /> Pesquisar
+                </button>
+              </div>
+              <button type="button" className="botao-secundario" onClick={() => setModalSchemaAberto(true)} style={{ whiteSpace: "nowrap" }}>
                 Gerir colunas
               </button>
-            </form>
-
-            <div className="acoes-pesquisa-inferior">
               <button
                 type="button"
                 className="botao-novo-material"
                 onClick={() => setTokenNovoMaterial((anterior) => anterior + 1)}
-                title="Adicionar novo material ao inventario"
+                title="Adicionar novo material ao inventário"
+                style={{ whiteSpace: "nowrap",color: "#fff" }}
               >
                 <IconeMais />
                 <span>Novo material</span>
               </button>
-            </div>
+            </form>
           </>
-        ) : (
-          <div className="painel-dashboard-resumo">
-            <p className="estado">
-              Cada clique no botao "-" da quantidade passa a ficar registado como venda e entra no historico do dashboard.
-            </p>
-            <button type="button" className="botao-secundario" onClick={carregarDashboard}>
-              Atualizar dashboard
-            </button>
-          </div>
-        )}
+        ) : null}
       </header>
 
       <section className="layout-principal">
@@ -763,7 +855,13 @@ export default function App() {
             onCriarNovo={handleCriarNovoInline}
           />
         ) : (
-          <DashboardVendas dashboard={dashboard} loading={loadingDashboard} />
+          <DashboardVendas
+            dashboard={dashboard}
+            loading={loadingDashboard}
+            operacaoVendaHistoricoId={operacaoVendaHistoricoId}
+            onAtualizarVendaHistorico={handleAtualizarVendaHistorico}
+            onEliminarVendaHistorico={handleEliminarVendaHistorico}
+          />
         )}
       </section>
 
@@ -802,3 +900,5 @@ export default function App() {
     </main>
   );
 }
+
+

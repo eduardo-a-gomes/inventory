@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 
 const CHAVE_PRECO = "preco";
 const CHAVE_QUANTIDADE = "quantidade";
@@ -67,7 +67,7 @@ function IconeArrastar() {
 }
 
 /**
- * Normaliza nomes para comparacao sem diferenca de maiusculas/minusculas e acentos.
+ * Normaliza nomes para comparação sem diferença de maiúsculas/minúsculas e acentos.
  */
 function normalizarNome(nome) {
   return String(nome || "")
@@ -79,7 +79,7 @@ function normalizarNome(nome) {
 }
 
 /**
- * Modal para gerir colunas do inventario.
+ * Modal para gerir colunas do inventário.
  */
 export default function SchemaManagerModal({ aberto, colunas, loading, onFechar, onAdicionar, onRenomear, onRemover, onReordenar }) {
   const [mostrarInputNova, setMostrarInputNova] = useState(false);
@@ -126,7 +126,7 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
     const nomeNormalizado = normalizarNome(nome);
     const colunaDuplicada = colunas.some((coluna) => normalizarNome(coluna.nome) === nomeNormalizado);
     if (colunaDuplicada) {
-      setErroNovaColuna("Ja existe uma coluna com esse nome.");
+      setErroNovaColuna("Já existe uma coluna com esse nome.");
       return;
     }
 
@@ -204,7 +204,7 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
         </div>
 
         <p className="modal-ajuda">
-          Ves aqui as colunas que podes gerir. As colunas Preço e Quantidade sao fixas e por isso nao aparecem nesta lista.
+          Vês aqui as colunas que podes gerir. As colunas Preço e Quantidade são fixas e por isso não aparecem nesta lista.
         </p>
 
         {mostrarInputNova ? (
@@ -265,7 +265,7 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
                 <button
                   type="button"
                   className="botao-iconico botao-arrastar-coluna"
-                  title={CHAVES_FIXAS.has(coluna.chave) ? "Esta coluna e fixa" : "Arrastar para mudar ordem da coluna"}
+                  title={CHAVES_FIXAS.has(coluna.chave) ? "Esta coluna é fixa" : "Arrastar para mudar ordem da coluna"}
                   draggable={!loading && !CHAVES_FIXAS.has(coluna.chave)}
                   onDragStart={(event) => {
                     if (CHAVES_FIXAS.has(coluna.chave)) {
@@ -345,3 +345,4 @@ export default function SchemaManagerModal({ aberto, colunas, loading, onFechar,
     </div>
   );
 }
+

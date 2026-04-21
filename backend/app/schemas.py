@@ -147,6 +147,13 @@ class RegistarVendaPayload(BaseModel):
     preco_unitario: float = Field(..., ge=0, description="Preco unitario real da venda.")
 
 
+class AtualizarVendaHistoricoPayload(BaseModel):
+    """Payload para editar um registo de venda existente."""
+
+    quantidade_vendida: int = Field(..., ge=1, description="Nova quantidade vendida.")
+    preco_unitario: float = Field(..., ge=0, description="Novo preco unitario da venda.")
+
+
 class RegistoVendaResultado(BaseModel):
     """Resposta apos registar uma venda."""
 
@@ -252,6 +259,7 @@ class DashboardResumoVendas(BaseModel):
     valor_em_stock: float = Field(default=0, ge=0)
     total_vendas: int = Field(default=0, ge=0)
     unidades_vendidas: int = Field(default=0, ge=0)
+    unidades_em_stock: int = Field(default=0, ge=0)
 
 
 class DashboardVendas(BaseModel):

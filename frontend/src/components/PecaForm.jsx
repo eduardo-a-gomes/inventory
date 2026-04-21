@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 
 const INITIAL_FORM = {
   referencia: "",
@@ -31,7 +31,7 @@ function precoParaNumero(valor) {
 }
 
 /**
- * Formulario reutilizavel para criar ou editar pecas.
+ * Formulário reutilizável para criar ou editar peças.
  */
 export default function PecaForm({ modo, pecaSelecionada, colunas, onSubmit, onCancel, loading, semCartao = false }) {
   const [form, setForm] = useState(INITIAL_FORM);
@@ -109,7 +109,7 @@ export default function PecaForm({ modo, pecaSelecionada, colunas, onSubmit, onC
 
       <form onSubmit={handleSubmit} className="form-grid">
         <label>
-          {obterNomeBase("referencia", "Referencia")}
+          {obterNomeBase("referencia", "Referência")}
           <input name="referencia" value={form.referencia} onChange={handleChange} required maxLength={MAX_TEXTO_MATERIAL} />
         </label>
 
@@ -124,7 +124,7 @@ export default function PecaForm({ modo, pecaSelecionada, colunas, onSubmit, onC
         </label>
 
         <label>
-          {obterNomeBase("designacao", "Designacao")}
+          {obterNomeBase("designacao", "Designação")}
           <input name="designacao" value={form.designacao} onChange={handleChange} required maxLength={MAX_TEXTO_MATERIAL} />
         </label>
 
@@ -175,11 +175,11 @@ export default function PecaForm({ modo, pecaSelecionada, colunas, onSubmit, onC
 
         <div className="form-actions">
           <button type="submit" disabled={loading}>
-            {loading ? "A guardar..." : modo === "editar" ? "Guardar alteracoes" : "Adicionar material"}
+            {loading ? "A guardar..." : modo === "editar" ? "Guardar alterações" : "Adicionar material"}
           </button>
           {typeof onCancel === "function" ? (
             <button type="button" className="botao-secundario" onClick={onCancel}>
-              {modo === "editar" ? "Cancelar edicao" : "Fechar"}
+              {modo === "editar" ? "Cancelar edição" : "Fechar"}
             </button>
           ) : null}
         </div>
@@ -193,3 +193,4 @@ export default function PecaForm({ modo, pecaSelecionada, colunas, onSubmit, onC
 
   return <section className="painel painel-form">{conteudoFormulario}</section>;
 }
+

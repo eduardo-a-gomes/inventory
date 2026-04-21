@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import FRONTEND_DIST_DIR
 from app.schemas import (
     AdicionarColunaPayload,
+    AtualizarVendaHistoricoPayload,
     DashboardVendas,
     AtualizarQuantidadePayload,
     ColunaSchema,
@@ -75,6 +76,45 @@ def listar_vendas() -> list[VendaHistoricoItem]:
         return repo.listar_vendas()
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@api_router.patch("/vendas/{venda_id}", response_model=VendaHistoricoItem)
+def atualizar_venda_historico(venda_id: str, payload: AtualizarVendaHistoricoPayload) -> VendaHistoricoItem:
+    """Edita um registo do historico de vendas e ajusta o stock em conformidade."""
+    try:
+        venda = repo.atualizar_venda_historico(venda_id, payload.quantidade_vendida, payload.preco_unitario)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if not venda:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venda nao encontrada.")
+    return venda
+
+
+@api_router.delete("/vendas/{venda_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_venda_historico(venda_id: str) -> Response:
+    """Elimina um registo do historico de vendas sem alterar o stock atual."""
+    try:
+        removed = repo.eliminar_venda_historico(venda_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venda nao encontrada.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@api_router.post("/vendas/{venda_id}/repor", response_model=Peca)
+def repor_venda_no_inventario(venda_id: str) -> Peca:
+    """Repõe a quantidade vendida no inventario e remove a venda do historico."""
+    try:
+        peca = repo.repor_venda_no_inventario(venda_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if not peca:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venda nao encontrada.")
+    return peca
 
 
 @api_router.get("/dashboard/vendas", response_model=DashboardVendas)
