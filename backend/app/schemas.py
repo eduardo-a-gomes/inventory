@@ -270,3 +270,18 @@ class DashboardVendas(BaseModel):
     valor_stock_por_categoria: list[DashboardSerieValor] = Field(default_factory=list)
     faturacao_por_material: list[DashboardSerieValor] = Field(default_factory=list)
     historico: list[VendaHistoricoItem] = Field(default_factory=list)
+
+
+class PreferenciaTemaFundo(BaseModel):
+    """Preferencia persistente para o tema de fundo da aplicacao."""
+
+    tema: str = Field(..., min_length=1, max_length=120)
+
+    @field_validator("tema")
+    @classmethod
+    def limpar_tema(cls, value: str) -> str:
+        """Normaliza o identificador do tema."""
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("O tema de fundo e obrigatorio.")
+        return cleaned

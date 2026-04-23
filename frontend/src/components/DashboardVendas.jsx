@@ -1,5 +1,17 @@
 ﻿import { useMemo, useState } from "react";
 
+const COLUNAS_PADRAO = [
+  { chave: "referencia", nome: "Referência" },
+  { chave: "categoria", nome: "Categoria" },
+  { chave: "marca", nome: "Marca" },
+  { chave: "designacao", nome: "Designação" },
+  { chave: "local", nome: "Local" },
+  { chave: "preco", nome: "Preço" },
+  { chave: "quantidade", nome: "Quantidade" },
+];
+const CHAVE_PRECO = "preco";
+const CHAVE_QUANTIDADE = "quantidade";
+
 function formatarEuro(valor) {
   const numero = Number(valor ?? 0);
   const seguro = Number.isFinite(numero) ? Math.max(0, numero) : 0;
@@ -47,6 +59,23 @@ function formatarEuroEixo(valor) {
   const numero = Number(valor ?? 0);
   const seguro = Number.isFinite(numero) ? Math.max(0, numero) : 0;
   return `${seguro.toLocaleString("pt-PT", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} €`;
+}
+
+function obterValorColuna(item, chave) {
+  if (Object.prototype.hasOwnProperty.call(item, chave)) {
+    return item[chave];
+  }
+  return item.extras?.[chave];
+}
+
+function ordenarColunasTabela(colunasOrigem) {
+  const colunas = Array.isArray(colunasOrigem) ? colunasOrigem : [];
+  const colunaQuantidade =
+    colunas.find((coluna) => coluna.chave === CHAVE_QUANTIDADE) || COLUNAS_PADRAO.find((coluna) => coluna.chave === CHAVE_QUANTIDADE);
+  const colunaPreco =
+    colunas.find((coluna) => coluna.chave === CHAVE_PRECO) || COLUNAS_PADRAO.find((coluna) => coluna.chave === CHAVE_PRECO);
+  const restantes = colunas.filter((coluna) => coluna.chave !== CHAVE_QUANTIDADE && coluna.chave !== CHAVE_PRECO);
+  return [...restantes, ...(colunaPreco ? [colunaPreco] : []), ...(colunaQuantidade ? [colunaQuantidade] : [])];
 }
 
 function IconeEditar() {
@@ -331,6 +360,7 @@ function PieVendidoVsStock({ resumo }) {
 
 export default function DashboardVendas({
   dashboard,
+  colunas = [],
   loading,
   operacaoVendaHistoricoId = null,
   onAtualizarVendaHistorico,
@@ -352,6 +382,10 @@ export default function DashboardVendas({
     () => obterSerieTemporal(historico, mesesVisiveis),
     [historico, mesesVisiveis],
   );
+  const colunasVisiveis = useMemo(() => {
+    const colunasBase = colunas.length ? colunas : COLUNAS_PADRAO;
+    return ordenarColunasTabela(colunasBase);
+  }, [colunas]);
 
   if (loading) {
     return (
@@ -431,10 +465,9 @@ export default function DashboardVendas({
               <thead>
                 <tr>
                   <th>Data</th>
-                  <th>Referência</th>
-                  <th>Designação</th>
-                  <th>Categoria</th>
-                  <th>Qtd.</th>
+                  {colunasVisiveis.map((coluna) => (
+                    <th key={coluna.chave}>{coluna.nome}</th>
+                  ))}
                   <th>Total</th>
                   <th>Ações</th>
                 </tr>
@@ -447,44 +480,54 @@ export default function DashboardVendas({
                   return (
                     <tr key={venda.id}>
                       <td>{formatarDataHora(venda.vendida_em)}</td>
-                      <td>{venda.referencia || "-"}</td>
-                      <td>{venda.designacao || "-"}</td>
-                      <td>{venda.categoria || "-"}</td>
-                      <td>
-                        {emEdicao ? (
-                          <div className="quantidade-box">
-                            <button
-                              type="button"
-                              className="botao-quantidade"
-                              disabled={emOperacao || Number(draftVenda.quantidade_vendida ?? 1) <= 1}
-                              onClick={() =>
-                                setDraftVenda((anterior) => ({
-                                  ...anterior,
-                                  quantidade_vendida: Math.max(1, Number(anterior.quantidade_vendida ?? 1) - 1),
-                                }))
-                              }
-                            >
-                              -
-                            </button>
-                            <span>{Math.max(1, Number(draftVenda.quantidade_vendida ?? 1))}</span>
-                            <button
-                              type="button"
-                              className="botao-quantidade"
-                              disabled={emOperacao}
-                              onClick={() =>
-                                setDraftVenda((anterior) => ({
-                                  ...anterior,
-                                  quantidade_vendida: Math.max(1, Number(anterior.quantidade_vendida ?? 1) + 1),
-                                }))
-                              }
-                            >
-                              +
-                            </button>
-                          </div>
-                        ) : (
-                          formatarInteiro(venda.quantidade_vendida)
-                        )}
-                      </td>
+                      {colunasVisiveis.map((coluna) => {
+                        if (coluna.chave === CHAVE_PRECO) {
+                          return <td key={`${venda.id}-${coluna.chave}`}>{formatarEuro(venda.preco_unitario)}</td>;
+                        }
+
+                        if (coluna.chave === CHAVE_QUANTIDADE) {
+                          return (
+                            <td key={`${venda.id}-${coluna.chave}`}>
+                              {emEdicao ? (
+                                <div className="quantidade-box">
+                                  <button
+                                    type="button"
+                                    className="botao-quantidade"
+                                    disabled={emOperacao || Number(draftVenda.quantidade_vendida ?? 1) <= 1}
+                                    onClick={() =>
+                                      setDraftVenda((anterior) => ({
+                                        ...anterior,
+                                        quantidade_vendida: Math.max(1, Number(anterior.quantidade_vendida ?? 1) - 1),
+                                      }))
+                                    }
+                                  >
+                                    -
+                                  </button>
+                                  <span>{Math.max(1, Number(draftVenda.quantidade_vendida ?? 1))}</span>
+                                  <button
+                                    type="button"
+                                    className="botao-quantidade"
+                                    disabled={emOperacao}
+                                    onClick={() =>
+                                      setDraftVenda((anterior) => ({
+                                        ...anterior,
+                                        quantidade_vendida: Math.max(1, Number(anterior.quantidade_vendida ?? 1) + 1),
+                                      }))
+                                    }
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              ) : (
+                                formatarInteiro(venda.quantidade_vendida)
+                              )}
+                            </td>
+                          );
+                        }
+
+                        const valor = obterValorColuna(venda, coluna.chave);
+                        return <td key={`${venda.id}-${coluna.chave}`}>{String(valor ?? "").trim() || "-"}</td>;
+                      })}
                       <td>
                         {formatarEuro(venda.total_venda)}
                       </td>

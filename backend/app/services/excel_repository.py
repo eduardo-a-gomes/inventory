@@ -23,6 +23,7 @@ from app.schemas import (
     Peca,
     PecaCreate,
     PecaUpdate,
+    PreferenciaTemaFundo,
     RegistoVendaResultado,
     VendaHistoricoItem,
 )
@@ -211,6 +212,37 @@ class ExcelRepository:
             faturacao_por_material=faturacao_por_material,
             historico=historico,
         )
+
+    def obter_tema_fundo(self) -> PreferenciaTemaFundo:
+        """Obtem o tema de fundo persistido na aplicacao."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT valor
+                FROM app_preferencias
+                WHERE chave = ?
+                """,
+                ("tema_fundo",),
+            ).fetchone()
+            tema = str(row["valor"]).strip() if row and row["valor"] else "atual"
+            return PreferenciaTemaFundo(tema=tema)
+
+    def guardar_tema_fundo(self, tema: str) -> PreferenciaTemaFundo:
+        """Guarda o tema de fundo persistente da aplicacao."""
+        tema_limpo = str(tema).strip() or "atual"
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO app_preferencias (chave, valor, atualizada_em)
+                VALUES (?, ?, ?)
+                ON CONFLICT(chave) DO UPDATE SET
+                    valor = excluded.valor,
+                    atualizada_em = excluded.atualizada_em
+                """,
+                ("tema_fundo", tema_limpo, datetime.utcnow().isoformat()),
+            )
+            conn.commit()
+        return PreferenciaTemaFundo(tema=tema_limpo)
 
     def obter_por_id(self, peca_id: str) -> Optional[Peca]:
         """Procura uma peca pelo ID."""
@@ -692,6 +724,15 @@ class ExcelRepository:
                     local TEXT,
                     vendida_em TEXT NOT NULL,
                     extras TEXT NOT NULL DEFAULT '{}'
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS app_preferencias (
+                    chave TEXT PRIMARY KEY,
+                    valor TEXT NOT NULL,
+                    atualizada_em TEXT NOT NULL
                 )
                 """
             )

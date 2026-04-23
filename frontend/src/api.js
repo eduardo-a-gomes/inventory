@@ -143,6 +143,14 @@ export const inventarioApi = {
 
   obterDashboardVendas: () => request("/dashboard/vendas"),
 
+  obterTemaFundo: () => request("/preferencias/tema-fundo"),
+
+  guardarTemaFundo: (tema) =>
+    request("/preferencias/tema-fundo", {
+      method: "PUT",
+      body: JSON.stringify({ tema }),
+    }),
+
   listarColunas: () => request("/schema/colunas"),
 
   adicionarColuna: (nome) =>

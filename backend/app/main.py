@@ -19,6 +19,7 @@ from app.schemas import (
     Peca,
     PecaCreate,
     PecaUpdate,
+    PreferenciaTemaFundo,
     RegistarVendaPayload,
     RegistoVendaResultado,
     ReordenarColunasPayload,
@@ -124,6 +125,24 @@ def obter_dashboard_vendas() -> DashboardVendas:
         return repo.obter_dashboard_vendas()
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@api_router.get("/preferencias/tema-fundo", response_model=PreferenciaTemaFundo)
+def obter_preferencia_tema_fundo() -> PreferenciaTemaFundo:
+    """Devolve o tema de fundo persistido."""
+    try:
+        return repo.obter_tema_fundo()
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@api_router.put("/preferencias/tema-fundo", response_model=PreferenciaTemaFundo)
+def guardar_preferencia_tema_fundo(payload: PreferenciaTemaFundo) -> PreferenciaTemaFundo:
+    """Guarda o tema de fundo persistido."""
+    try:
+        return repo.guardar_tema_fundo(payload.tema)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @api_router.get("/schema/colunas", response_model=list[ColunaSchema])

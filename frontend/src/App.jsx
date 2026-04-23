@@ -133,6 +133,7 @@ export default function App() {
   });
   const [seletorFundosAberto, setSeletorFundosAberto] = useState(false);
   const seletorFundosRef = useRef(null);
+  const temaFundoInicializadoRef = useRef(false);
 
   const mostrarToast = (tipo, mensagem) => {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -219,10 +220,50 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let ativo = true;
+
+    const carregarTemaFundo = async () => {
+      try {
+        const preferencia = await inventarioApi.obterTemaFundo();
+        if (!ativo) {
+          return;
+        }
+
+        const temaServidor = preferencia?.tema;
+        if (TEMAS_FUNDO.some((tema) => tema.id === temaServidor)) {
+          setTemaFundo(temaServidor);
+        }
+      } catch (error) {
+        mostrarToast("erro", error.message);
+      } finally {
+        if (ativo) {
+          temaFundoInicializadoRef.current = true;
+        }
+      }
+    };
+
+    carregarTemaFundo();
+
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const classesTemas = TEMAS_FUNDO.map((tema) => `tema-fundo-${tema.id}`);
     document.body.classList.remove(...classesTemas);
     document.body.classList.add(`tema-fundo-${temaFundo}`);
     window.localStorage.setItem(STORAGE_KEY_TEMA_FUNDO, temaFundo);
+  }, [temaFundo]);
+
+  useEffect(() => {
+    if (!temaFundoInicializadoRef.current) {
+      return;
+    }
+
+    inventarioApi.guardarTemaFundo(temaFundo).catch((error) => {
+      mostrarToast("erro", error.message);
+    });
   }, [temaFundo]);
 
   useEffect(() => {
@@ -857,6 +898,7 @@ export default function App() {
         ) : (
           <DashboardVendas
             dashboard={dashboard}
+            colunas={colunas}
             loading={loadingDashboard}
             operacaoVendaHistoricoId={operacaoVendaHistoricoId}
             onAtualizarVendaHistorico={handleAtualizarVendaHistorico}
