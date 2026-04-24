@@ -64,12 +64,13 @@ Depois disso:
 
 1. Abre uma pequena janela de controlo da app
 2. O browser predefinido abre automaticamente com o inventario
+3. A pequena janela pode minimizar-se sozinha pouco depois da abertura do browser
 
 ## Muito importante durante o uso
 
 A pequena janela da app deve ficar aberta enquanto ele estiver a usar o inventario.
 
-Pode minimizar essa janela, mas nao a deve fechar enquanto estiver a trabalhar.
+Pode deixar essa janela minimizada, mas nao a deve fechar enquanto estiver a trabalhar.
 
 Quando terminar de usar a app:
 

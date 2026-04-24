@@ -300,9 +300,20 @@ class LauncherWindow:
     def _on_browser_opened(self, auto: bool) -> None:
         if auto:
             self.status_var.set("Aplicacao pronta. Browser aberto automaticamente.")
+            self.info_var.set("A janela foi minimizada automaticamente. Feche-a quando terminar para desligar a app.")
+            self.root.after(300, self._minimize_window)
         else:
             self.status_var.set("Aplicacao pronta. Pedido manual para abrir o browser enviado.")
-        self.info_var.set("Pode minimizar esta janela. Feche-a quando terminar para desligar a app.")
+            self.info_var.set("Pode minimizar esta janela. Feche-a quando terminar para desligar a app.")
+
+    def _minimize_window(self) -> None:
+        """Minimiza a janela de controlo sem fechar o servidor local."""
+        LOGGER.info("A minimizar a janela principal do launcher.")
+        try:
+            self.root.update_idletasks()
+            self.root.iconify()
+        except tk.TclError:
+            LOGGER.warning("Nao foi possivel minimizar a janela principal.")
 
     def _on_browser_error(self, exc: Exception) -> None:
         self.status_var.set("Aplicacao pronta, mas o browser nao abriu automaticamente.")
