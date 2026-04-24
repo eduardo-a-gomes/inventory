@@ -79,7 +79,7 @@ class ExcelRepository:
             rows = conn.execute(
                 """
                 SELECT id, peca_id, referencia, categoria, marca, designacao, local,
-                       preco_unitario, quantidade_vendida, vendida_em, extras
+                       preco_unitario, preco_total, quantidade_vendida, vendida_em, extras
                 FROM vendas
                 ORDER BY vendida_em DESC, id DESC
                 """
@@ -113,10 +113,10 @@ class ExcelRepository:
             conn.execute(
                 """
                 UPDATE vendas
-                SET quantidade_vendida = ?, preco_unitario = ?
+                SET quantidade_vendida = ?, preco_unitario = ?, preco_total = ?
                 WHERE id = ?
                 """,
-                (quantidade_vendida, preco_unitario, venda_id),
+                (quantidade_vendida, preco_unitario, self._safe_price(preco_unitario * quantidade_vendida), venda_id),
             )
             conn.commit()
 
@@ -363,14 +363,15 @@ class ExcelRepository:
             ).fetchone()
             return self._row_to_peca(row) if row else None
 
-    def registar_venda(self, peca_id: str, quantidade_vendida: int, preco_unitario: float) -> Optional[RegistoVendaResultado]:
+    def registar_venda(self, peca_id: str, quantidade_vendida: int, preco_total: float) -> Optional[RegistoVendaResultado]:
         """Regista uma venda e reduz o stock da peca."""
         quantidade_vendida = max(0, int(quantidade_vendida))
         if quantidade_vendida <= 0:
             raise ValueError("Indica uma quantidade valida para a venda.")
-        preco_unitario = self._safe_price(preco_unitario)
-        if preco_unitario < 0:
+        preco_total = self._safe_price(preco_total)
+        if preco_total < 0:
             raise ValueError("Indica um preco valido para a venda.")
+        preco_unitario = preco_total / quantidade_vendida if quantidade_vendida > 0 else 0
 
         with self._lock, self._connect() as conn:
             row = conn.execute(
@@ -389,7 +390,7 @@ class ExcelRepository:
             if quantidade_vendida > stock_atual:
                 raise ValueError("A quantidade vendida nao pode ser superior ao stock atual.")
 
-            self._criar_registo_venda(conn, peca, quantidade_vendida, preco_unitario)
+            self._criar_registo_venda(conn, peca, quantidade_vendida, preco_unitario, preco_total)
 
             quantidade_restante = stock_atual - quantidade_vendida
             if quantidade_restante <= 0:
@@ -720,6 +721,7 @@ class ExcelRepository:
                     marca TEXT NOT NULL,
                     designacao TEXT NOT NULL,
                     preco_unitario REAL NOT NULL DEFAULT 0,
+                    preco_total REAL NOT NULL DEFAULT 0,
                     quantidade_vendida INTEGER NOT NULL DEFAULT 1,
                     local TEXT,
                     vendida_em TEXT NOT NULL,
@@ -747,6 +749,7 @@ class ExcelRepository:
             )
 
             self._migrar_preco_core(conn)
+            self._migrar_preco_total_vendas(conn)
 
             ordem_existente = conn.execute("SELECT COUNT(*) AS total FROM schema_ordem_colunas").fetchone()
             if int(ordem_existente["total"]) == 0:
@@ -823,6 +826,23 @@ class ExcelRepository:
             VALUES (?, ?)
             """,
             ("preco", "Preço"),
+        )
+
+    def _migrar_preco_total_vendas(self, conn: sqlite3.Connection) -> None:
+        """Garante que o total da venda existe como coluna dedicada no historico."""
+        colunas_vendas = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(vendas)").fetchall()
+        }
+        if "preco_total" in colunas_vendas:
+            return
+
+        conn.execute("ALTER TABLE vendas ADD COLUMN preco_total REAL NOT NULL DEFAULT 0")
+        conn.execute(
+            """
+            UPDATE vendas
+            SET preco_total = ROUND(COALESCE(preco_unitario, 0) * COALESCE(quantidade_vendida, 1), 2)
+            """
         )
 
     def _migrar_excel_legacy_se_necessario(self) -> None:
@@ -992,7 +1012,7 @@ class ExcelRepository:
         """Converte linha SQL de venda num item do historico."""
         preco_unitario = self._safe_price(row["preco_unitario"])
         quantidade_vendida = max(1, int(row["quantidade_vendida"]))
-        total_venda = round(preco_unitario * quantidade_vendida, 2)
+        total_venda = self._safe_price(row["preco_total"]) if "preco_total" in row.keys() else round(preco_unitario * quantidade_vendida, 2)
         vendida_em_raw = str(row["vendida_em"] or "").strip()
         try:
             vendida_em = datetime.fromisoformat(vendida_em_raw)
@@ -1019,7 +1039,7 @@ class ExcelRepository:
         return conn.execute(
             """
             SELECT id, peca_id, referencia, categoria, marca, designacao, local,
-                   preco_unitario, quantidade_vendida, vendida_em, extras
+                   preco_unitario, preco_total, quantidade_vendida, vendida_em, extras
             FROM vendas
             WHERE id = ?
             """,
@@ -1144,15 +1164,16 @@ class ExcelRepository:
         peca: Peca,
         quantidade_vendida: int,
         preco_unitario: float,
+        preco_total: float,
     ) -> None:
         """Guarda um snapshot da venda para analise futura."""
         conn.execute(
             """
             INSERT INTO vendas (
                 id, peca_id, referencia, categoria, marca, designacao,
-                preco_unitario, quantidade_vendida, local, vendida_em, extras
+                preco_unitario, preco_total, quantidade_vendida, local, vendida_em, extras
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(uuid4()),
@@ -1162,6 +1183,7 @@ class ExcelRepository:
                 peca.marca,
                 peca.designacao,
                 self._safe_price(preco_unitario),
+                self._safe_price(preco_total),
                 max(1, int(quantidade_vendida)),
                 peca.local,
                 datetime.now().isoformat(timespec="seconds"),

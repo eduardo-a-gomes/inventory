@@ -466,7 +466,7 @@ export default function DashboardVendas({
                 <tr>
                   <th>Data</th>
                   {colunasVisiveis.map((coluna) => (
-                    <th key={coluna.chave}>{coluna.nome}</th>
+                    <th key={coluna.chave}>{coluna.chave === CHAVE_PRECO ? "Preço unit." : coluna.nome}</th>
                   ))}
                   <th>Total</th>
                   <th>Ações</th>

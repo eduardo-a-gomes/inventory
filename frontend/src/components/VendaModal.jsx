@@ -18,7 +18,8 @@ function precoParaNumero(valor) {
 
 export default function VendaModal({ aberto, peca, loading = false, onConfirm, onCancel }) {
   const [quantidade, setQuantidade] = useState(1);
-  const [precoUnitario, setPrecoUnitario] = useState("0.00");
+  const [precoTotal, setPrecoTotal] = useState("0.00");
+  const [precoFoiEditado, setPrecoFoiEditado] = useState(false);
   const quantidadeMaxima = Math.max(1, Number(peca?.quantidade ?? 1));
 
   useEffect(() => {
@@ -27,10 +28,24 @@ export default function VendaModal({ aberto, peca, loading = false, onConfirm, o
     }
 
     setQuantidade(1);
-    setPrecoUnitario(Number(peca.preco ?? 0).toFixed(2));
+    setPrecoTotal(Number(peca.preco ?? 0).toFixed(2));
+    setPrecoFoiEditado(false);
   }, [aberto, peca]);
 
-  const total = useMemo(() => precoParaNumero(precoUnitario) * Math.max(1, Number(quantidade || 1)), [precoUnitario, quantidade]);
+  useEffect(() => {
+    if (!aberto || !peca || precoFoiEditado) {
+      return;
+    }
+
+    const totalBase = precoParaNumero(peca.preco) * Math.max(1, Number(quantidade || 1));
+    setPrecoTotal(totalBase.toFixed(2));
+  }, [aberto, peca, precoFoiEditado, quantidade]);
+
+  const total = useMemo(() => precoParaNumero(precoTotal), [precoTotal]);
+  const precoUnitarioCalculado = useMemo(() => {
+    const quantidadeSegura = Math.max(1, Number(quantidade || 1));
+    return total / quantidadeSegura;
+  }, [total, quantidade]);
 
   if (!aberto || !peca) {
     return null;
@@ -75,14 +90,17 @@ export default function VendaModal({ aberto, peca, loading = false, onConfirm, o
           </label>
 
           <label>
-            Preço unitário da venda
+            Preço total da venda
             <div className="input-preco-wrapper">
               <input
                 className="input-preco"
                 type="text"
                 inputMode="decimal"
-                value={precoUnitario}
-                onChange={(event) => setPrecoUnitario(normalizarInputPreco(event.target.value))}
+                value={precoTotal}
+                onChange={(event) => {
+                  setPrecoFoiEditado(true);
+                  setPrecoTotal(normalizarInputPreco(event.target.value));
+                }}
                 disabled={loading}
                 placeholder="0.00"
               />
@@ -90,9 +108,6 @@ export default function VendaModal({ aberto, peca, loading = false, onConfirm, o
             </div>
           </label>
         </div>
-
-        <p className="modal-ajuda">Total da venda: {total.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</p>
-
         <div className="confirm-actions">
           <button type="button" className="botao-secundario" onClick={onCancel} disabled={loading}>
             Cancelar
@@ -102,7 +117,7 @@ export default function VendaModal({ aberto, peca, loading = false, onConfirm, o
             onClick={() =>
               onConfirm?.({
                 quantidade: Math.max(1, Number(quantidade || 1)),
-                preco_unitario: precoParaNumero(precoUnitario),
+                preco_total: precoParaNumero(precoTotal),
               })
             }
             disabled={loading}

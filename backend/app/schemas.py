@@ -144,7 +144,22 @@ class RegistarVendaPayload(BaseModel):
     """Payload para registar a venda de uma ou mais unidades."""
 
     quantidade: int = Field(default=1, ge=1, description="Quantidade vendida.")
-    preco_unitario: float = Field(..., ge=0, description="Preco unitario real da venda.")
+    preco_total: Optional[float] = Field(default=None, ge=0, description="Preco total real da venda.")
+    preco_unitario: Optional[float] = Field(default=None, ge=0, description="Compatibilidade com payloads antigos.")
+
+    @model_validator(mode="after")
+    def validar_preco_venda(self) -> "RegistarVendaPayload":
+        """Exige pelo menos um preco e normaliza o formato legado."""
+        if self.preco_total is None and self.preco_unitario is None:
+            raise ValueError("Indica o preco total da venda.")
+        return self
+
+    def obter_preco_total(self) -> float:
+        """Calcula o preco total a partir do formato novo ou do legado."""
+        if self.preco_total is not None:
+            return float(self.preco_total)
+        quantidade = max(1, int(self.quantidade or 1))
+        return round(float(self.preco_unitario or 0) * quantidade, 2)
 
 
 class AtualizarVendaHistoricoPayload(BaseModel):
