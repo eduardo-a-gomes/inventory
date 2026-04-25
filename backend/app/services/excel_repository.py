@@ -62,7 +62,7 @@ class ExcelRepository:
                 """
                 SELECT id, referencia, categoria, marca, designacao, preco, quantidade, local, extras
                 FROM pecas
-                ORDER BY LOWER(designacao), LOWER(referencia)
+                ORDER BY rowid DESC
                 """
             ).fetchall()
 
